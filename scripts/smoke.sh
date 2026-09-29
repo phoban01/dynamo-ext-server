@@ -80,6 +80,13 @@ expect_fail "move d1 to claim c2" \
   kubectl patch device d1 --subresource=status --type=merge -p "$(ref c2)"
 expect_fail "delete bound device d1" kubectl delete device d1
 
+test "$(kubectl get device d1 -o jsonpath='{.status.fencingToken}')" = 1
+
+step "release d1, bind it again, and check the token goes up"
+kubectl patch device d1 --subresource=status --type=merge -p '{"status":{"claimRef":null}}' >/dev/null
+kubectl patch device d1 --subresource=status --type=merge -p "$(ref c3)" >/dev/null
+test "$(kubectl get device d1 -o jsonpath='{.status.fencingToken}')" = 2
+
 step "release d1, then delete it"
 kubectl patch device d1 --subresource=status --type=merge -p '{"status":{"claimRef":null}}' >/dev/null
 kubectl delete device d1 >/dev/null

@@ -97,6 +97,26 @@ func (statusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obj
 	d.Spec = o.Spec
 	// Labels and annotations belong to the main resource.
 	d.Labels, d.Annotations = o.Labels, o.Annotations
+	d.Status.FencingToken = nextToken(o, d)
+}
+
+//= spec/solas.md#5-3-status-updates
+//# When a status update sets `claimRef` on a free device, the server MUST
+//# set `status.fencingToken` to the old value plus 1.
+
+//= spec/solas.md#5-3-status-updates
+//# The server MUST ignore the `status.fencingToken` that a client sends.
+
+//= spec/solas.md#5-3-status-updates
+//# In every other status update, the server MUST keep the old token.
+
+// nextToken returns the fencing token that the server stores for a status
+// update from old to d.
+func nextToken(old, d *solas.Device) int64 {
+	if old.Status.ClaimRef == nil && d.Status.ClaimRef != nil {
+		return old.Status.FencingToken + 1
+	}
+	return old.Status.FencingToken
 }
 
 func (statusStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {

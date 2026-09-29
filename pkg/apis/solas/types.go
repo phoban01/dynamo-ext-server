@@ -27,6 +27,9 @@ type DeviceSpec struct {
 type DeviceStatus struct {
 	// ClaimRef names the holder. A device with no ClaimRef is free.
 	ClaimRef *ClaimRef
+	// FencingToken is the fencing token of the last bind. The server sets
+	// it, spec 5.3.
+	FencingToken int64
 }
 
 // ClaimRef names the claim that holds a device, spec 5.2.
