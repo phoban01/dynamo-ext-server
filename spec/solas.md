@@ -135,7 +135,85 @@ by the watch cache, or it MUST fail with `410 Gone`.
 
 ## 3. Resource versions
 
+### 3.1. Issue
+
+Each resource MUST have its own counter item.
+The first write to a resource MUST get resource version 1.
+Each write MUST get a resource version exactly one more than the
+previous write to the same resource.
+The write transaction in section 2.3 gives this, because the counter
+update and the object action commit together or not at all.
+
+### 3.2. Order
+
+A transaction for version `n + 1` cannot commit before the transaction
+for version `n`, because its counter condition needs the value `n`.
+So when the counter shows the value `c`, every write with a version up to
+`c` has committed.
+
+The resource version of a resource MUST strictly increase in commit
+order.
+The server MUST NOT compare resource versions of two different resources.
+
+### 3.3. Objects
+
+The `metadata.resourceVersion` of an object MUST equal the version of the
+write that last changed it.
+The `rv` attribute of the object item MUST equal the same version.
+The object in a `DELETED` event MUST carry the version of the delete.
+The server MUST encode each resource version as a decimal string.
+Kubernetes clients treat a resource version as an opaque string.
+
 ## 4. Watch
+
+### 4.1. Event log
+
+Each write MUST add one event item to the event log of its resource.
+The event item MUST have the same resource version as the write.
+An event item MUST expire a set retention time after its write.
+The retention time MUST be a setting of the API server.
+The default retention time is one hour.
+The server MUST NOT depend on the time at which DynamoDB deletes an
+expired item.
+DynamoDB can delete expired items late and in any order.
+
+### 4.2. Poll
+
+A watch from version `r` MUST deliver every event with a version greater
+than `r`.
+A watch MUST deliver events in version order.
+A watch MUST NOT deliver the same event twice.
+
+Let `last` be the version of the last event that the watch delivered, or
+`r` before the first event.
+Each poll MUST read the counter first.
+Let `c` be the counter value.
+If `c` equals `last`, the poll MUST return no events.
+If `c` is greater than `last`, the poll MUST query the event log for the
+versions from `last + 1` to `c`.
+Every write up to `c` has committed before the query starts, so a
+complete log holds each of these versions.
+
+The server SHOULD poll each resource at least once each second.
+The server SHOULD NOT poll a resource more often than every 100
+milliseconds.
+The server SHOULD run one poller for each resource and share it between
+watchers.
+The API server watch cache gives this sharing.
+
+### 4.3. Gaps
+
+If the query result does not hold each version from `last + 1` to `c`
+exactly once, the watch MUST end with `410 Gone`.
+A gap means that DynamoDB has deleted expired events.
+A client that gets `410 Gone` lists again and starts a new watch, as
+Kubernetes requires.
+
+### 4.4. Start
+
+A watch with no resource version MUST first list the current state.
+It MUST then deliver an `ADDED` event for each object in the list.
+It MUST then continue from the version of the list.
 
 ## 5. Device
 
