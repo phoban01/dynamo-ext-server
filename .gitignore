@@ -1,0 +1,5 @@
+/bin/
+/.devbox/
+*.test
+*.out
+/_output/
