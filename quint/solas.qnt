@@ -130,8 +130,177 @@ module solas {
     }
   }
 
+  // ---- Helpers ----
+
+  pure def active(cl: Cluster): bool = cl.up and not(cl.left)
+
+  // The holder's own view of its lease, spec 7.4.
+  def localLive(c: str): bool = {
+    val cl = s.clusters.get(c)
+    active(cl) and cl.uid != 0 and cl.clock < cl.renewedAt + CFG.D - CFG.M
+  }
+
+  pure def names(ref: OptRef, claim: str): bool = match ref {
+    | Held(r) => r.claim == claim
+    | Free => false
+  }
+
+  pure def namesWith(ref: OptRef, claim: str, muid: int): bool = match ref {
+    | Held(r) => r.claim == claim and r.muid == muid
+    | Free => false
+  }
+
+  pure def refMuid(ref: OptRef): int = match ref {
+    | Held(r) => r.muid
+    | Free => 0
+  }
+
+  pure def refMember(ref: OptRef): str = match ref {
+    | Held(r) => r.member
+    | Free => ""
+  }
+
+  pure def isFree(ref: OptRef): bool = match ref {
+    | Held(_) => false
+    | Free => true
+  }
+
+  // Claims of cluster c that were bound under another member UID become
+  // Lost, spec 6.5.
+  def markLost(c: str, uid: int): str -> Claim =
+    s.claims.keys().mapBy(k => {
+      val cm = s.claims.get(k)
+      if (CFG.owner.get(k) == c
+          and (cm.phase == "Bound" or cm.phase == "Suspended")
+          and cm.muid != uid)
+        { ...cm, phase: "Lost" }
+      else cm
+    })
+
+  // ---- Membership, spec 7.2, 7.3 ----
+
+  // Join, or renew the existing Member after a controller start.
+  action join(c: str): bool = {
+    val cl = s.clusters.get(c)
+    val mo = s.members.get(c)
+    val rv = s.memberCounter + 1
+    val uid = if (mo.exists) mo.uid else s.nextUid
+    all {
+      active(cl),
+      cl.uid == 0,
+      s' = {
+        ...s,
+        members: s.members.set(c, { exists: true, uid: uid, rv: rv }),
+        memberCounter: rv,
+        nextUid: if (mo.exists) s.nextUid else s.nextUid + 1,
+        clusters: s.clusters.set(c, {
+          ...cl,
+          uid: uid,
+          memberRv: rv,
+          renewedAt: cl.clock,
+          renewInFlight: false,
+        }),
+        claims: markLost(c, uid),
+      },
+    }
+  }
+
+  // The holder records S, the local time at which it sends the renew.
+  action renewSend(c: str): bool = {
+    val cl = s.clusters.get(c)
+    all {
+      active(cl),
+      cl.uid != 0,
+      not(cl.renewInFlight),
+      s' = {
+        ...s,
+        clusters: s.clusters.set(c, {
+          ...cl,
+          renewInFlight: true,
+          renewSentAt: cl.clock,
+          renewRv: cl.memberRv,
+        }),
+      },
+    }
+  }
+
+  // The renew lands on condition that the Member rv is unchanged.
+  action renewLand(c: str): bool = {
+    val cl = s.clusters.get(c)
+    val mo = s.members.get(c)
+    val mine = mo.exists and mo.uid == cl.uid
+    val rv = s.memberCounter + 1
+    all {
+      active(cl),
+      cl.renewInFlight,
+      if (mine and mo.rv == cl.renewRv)
+        s' = {
+          ...s,
+          members: s.members.set(c, { ...mo, rv: rv }),
+          memberCounter: rv,
+          clusters: s.clusters.set(c, {
+            ...cl,
+            renewInFlight: false,
+            memberRv: rv,
+            renewedAt: cl.renewSentAt,
+          }),
+        }
+      else
+        // 404 NotFound clears the UID, so the member joins again.
+        // 409 Conflict reads the rv again.
+        s' = {
+          ...s,
+          clusters: s.clusters.set(c, {
+            ...cl,
+            renewInFlight: false,
+            uid: if (mine) cl.uid else 0,
+            memberRv: mo.rv,
+          }),
+        },
+    }
+  }
+
+  // A crash stops the cluster. Its claims stay in its etcd, and its bind
+  // writes in flight can still land.
+  action crash(c: str): bool = {
+    val cl = s.clusters.get(c)
+    all {
+      active(cl),
+      s' = { ...s, clusters: s.clusters.set(c, { ...cl, up: false }) },
+    }
+  }
+
+  // The controller starts again with no memory of its lease or its sweeps.
+  action recover(c: str): bool = {
+    val cl = s.clusters.get(c)
+    all {
+      not(cl.up),
+      not(cl.left),
+      s' = {
+        ...s,
+        clusters: s.clusters.set(c, {
+          ...cl,
+          up: true,
+          uid: 0,
+          renewInFlight: false,
+          draining: false,
+          seen: CFG.clusters.mapBy(_ => NOSEEN),
+          sweepPhase: 0,
+        }),
+      },
+    }
+  }
+
   action step = any {
     tick,
+    nondet c = CFG.clusters.oneOf()
+    any {
+      join(c),
+      renewSend(c),
+      renewLand(c),
+      crash(c),
+      recover(c),
+    },
   }
 }
 
