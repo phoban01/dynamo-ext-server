@@ -37,9 +37,9 @@ func eventSK(rv uint64) string {
 	return fmt.Sprintf("%020d", rv)
 }
 
-//= spec/solas.md#2-2-items
-//# An object item MUST have `sk` equal to its storage key without the
-//# resource prefix and the `/` after it.
+// = spec/solas.md#2-2-items
+// # An object item MUST have `sk` equal to its storage key without the
+// # resource prefix and the `/` after it.
 //
 // sortKey maps a storage key to the sort key of its object item. The sort
 // key is the part of the key after the resource prefix, for example

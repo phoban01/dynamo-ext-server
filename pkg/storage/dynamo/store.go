@@ -104,29 +104,11 @@ func newStore(cfg Config, codec runtime.Codec, newFunc, newListFunc func() runti
 
 func (s *store) Versioner() storage.Versioner { return s.versioner }
 
-func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object, ttl uint64) error {
-	return errors.ErrUnsupported
-}
-
-func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions,
-	validateDeletion storage.ValidateObjectFunc, cachedExistingObject runtime.Object, opts storage.DeleteOptions) error {
-	return errors.ErrUnsupported
-}
-
 func (s *store) Watch(ctx context.Context, key string, opts storage.ListOptions) (watch.Interface, error) {
 	return nil, errors.ErrUnsupported
 }
 
-func (s *store) Get(ctx context.Context, key string, opts storage.GetOptions, out runtime.Object) error {
-	return errors.ErrUnsupported
-}
-
 func (s *store) GetList(ctx context.Context, key string, opts storage.ListOptions, listObj runtime.Object) error {
-	return errors.ErrUnsupported
-}
-
-func (s *store) GuaranteedUpdate(ctx context.Context, key string, destination runtime.Object, ignoreNotFound bool,
-	preconditions *storage.Preconditions, tryUpdate storage.UpdateFunc, cachedExistingObject runtime.Object) error {
 	return errors.ErrUnsupported
 }
 

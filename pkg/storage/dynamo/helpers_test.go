@@ -31,6 +31,7 @@ func init() {
 
 func newPod() runtime.Object     { return &example.Pod{} }
 func newPodList() runtime.Object { return &example.PodList{} }
+
 var testGR = schema.GroupResource{Group: "example.apiserver.k8s.io", Resource: "pods"}
 
 // fakeAPI satisfies API for tests that do not call DynamoDB.
