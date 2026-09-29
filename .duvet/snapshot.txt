@@ -140,6 +140,10 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[implementation]: A holder is different when any field of `claimRef` differs.
     TEXT[!MUST,implementation]: To move a device, a client MUST first clear `claimRef` and then set it
     TEXT[!MUST,implementation]: in a second update.
+    TEXT[!MUST]: When a status update sets `claimRef` on a free device, the server MUST
+    TEXT[!MUST]: set `status.fencingToken` to the old value plus 1.
+    TEXT[!MUST]: The server MUST ignore the `status.fencingToken` that a client sends.
+    TEXT[!MUST]: In every other status update, the server MUST keep the old token.
     TEXT[!MUST,implementation,test]: The server MUST reject a status update that sets a `claimRef` with an
     TEXT[!MUST,implementation,test]: empty field.
     TEXT[!MUST,implementation,test]: A spec update MUST NOT change `status`.
@@ -188,6 +192,7 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST]: After a successful bind, the controller MUST set the claim phase to
     TEXT[!MUST]: `Bound`.
     TEXT[!MUST]: It MUST also set `status.deviceName` and `status.memberUID`.
+    TEXT[!MUST]: It MUST also set `status.fencingToken` to the fencing token of the device.
     TEXT[!MUST]: The controller MUST NOT set a claim to `Bound` from a bind that carried
     TEXT[!MUST]: an older member UID.
     TEXT[!MUST]: If more than one device has a `claimRef` with the same claim UID, the
@@ -222,6 +227,17 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST]: claim with the old `status.memberUID` to `Lost`.
     TEXT[!MUST]: A `Lost` claim MUST NOT bind again.
     TEXT[!MUST]: Workloads MUST use a device only while its claim is in effect.
+
+  SECTION: [6.6. Device use](#6-6-device-use)
+    TEXT[!MUST]: A workload MUST present the fencing token of its claim each time it uses
+    TEXT[!MUST]: the device.
+    TEXT[!MUST]: The device MUST remember the highest token that it has accepted.
+    TEXT[!MUST]: The device MUST reject a use with a token lower than the highest token
+    TEXT[!MUST]: that it has accepted.
+    TEXT[!MUST]: The device MUST accept a use with a token equal to or higher than the
+    TEXT[!MUST]: highest token that it has accepted, and record that token as the highest.
+    TEXT[!MUST]: A device that cannot check tokens MUST sit behind a gatekeeper that
+    TEXT[!MUST]: checks them.
 
   SECTION: [7.1. Resource](#7-1-resource)
     TEXT[!MUST,implementation]: `Member` MUST be a cluster-scoped resource in the group `solas.dev`,
