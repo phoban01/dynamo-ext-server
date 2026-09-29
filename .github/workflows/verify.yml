@@ -1,0 +1,28 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jetify-com/devbox-install-action@v0.15.0
+        with:
+          enable-cache: true
+
+      - name: Cache Duvet
+        uses: actions/cache@v6
+        with:
+          path: .devbox/cargo/bin/duvet
+          key: duvet-${{ runner.os }}-${{ hashFiles('scripts/duvet-install.sh') }}
+
+      - name: Install Duvet
+        run: devbox run duvet-install
+
+      - name: Verify
+        run: devbox run verify
