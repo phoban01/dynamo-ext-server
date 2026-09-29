@@ -23,9 +23,7 @@ k3d kubeconfig get "$cluster" >"$kube"
 export KUBECONFIG="$root/$kube"
 
 say "load images"
-for image in solas-apiserver:dev solas-controller:dev solas-demo:dev; do
-  image_import "$image" "$cluster"
-done
+image_import "$cluster" solas-apiserver:dev solas-controller:dev solas-demo:dev
 
 say "deploy solas-apiserver, table $endpoint"
 kubectl apply -f deploy/apiserver/namespace.yaml >/dev/null

@@ -47,8 +47,7 @@ cluster_create "$cluster" "$KUBECONFIG"
 
 step "build and load the images"
 scripts/images.sh >/dev/null
-image_import solas-apiserver:dev "$cluster"
-image_import solas-controller:dev "$cluster"
+image_import "$cluster" solas-apiserver:dev solas-controller:dev
 
 step "deploy dynamodb-local and the API server"
 kubectl apply -f deploy/apiserver/namespace.yaml >/dev/null
