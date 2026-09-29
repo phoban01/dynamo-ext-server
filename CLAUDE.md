@@ -12,6 +12,8 @@ Device : global state object that describes a devices and whose status shows whe
 DeviceClaim : cluster local claim on a resource
 
 The result should be a fully working demo (it is fine to use localstack if possible)
+LocalStack now needs an auth token, so the project uses amazon/dynamodb-local
+(docs/adr/0007-dynamodb-local.md).
 
 
 
@@ -69,6 +71,8 @@ Claude Code session, so heavy jobs must not overlap.
   ([docs/adr/0004-watch-by-polling.md](docs/adr/0004-watch-by-polling.md)).
 - The member UID is the fencing token for reclaim
   ([docs/adr/0005-member-uid-fencing.md](docs/adr/0005-member-uid-fencing.md)).
+- Tests and the demo use amazon/dynamodb-local, not LocalStack
+  ([docs/adr/0007-dynamodb-local.md](docs/adr/0007-dynamodb-local.md)).
 - The API group is `solas.dev/v1alpha1`
   ([docs/adr/0006-api-group.md](docs/adr/0006-api-group.md)).
 
