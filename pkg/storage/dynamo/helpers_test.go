@@ -47,7 +47,7 @@ func newTestStore(t *testing.T) *store {
 		t.Fatal(err)
 	}
 	s, err := newStore(Config{Client: c, Table: table, PollInterval: 20 * time.Millisecond},
-		codec, newPod, newPodList, "/", "/pods", testGR)
+		codec, newPod, newPodList, "/", "/pods/", testGR)
 	if err != nil {
 		t.Fatal(err)
 	}

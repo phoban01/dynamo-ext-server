@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -86,7 +87,7 @@ func newStore(cfg Config, codec runtime.Codec, newFunc, newListFunc func() runti
 		newFunc:        newFunc,
 		newListFunc:    newListFunc,
 		resourcePrefix: resourcePrefix,
-		resource:       joinPrefix(prefix, resourcePrefix),
+		resource:       joinPrefix(prefix, strings.TrimSuffix(resourcePrefix, "/")),
 		groupResource:  groupResource,
 		now:            time.Now,
 	}
@@ -106,10 +107,6 @@ func (s *store) Versioner() storage.Versioner { return s.versioner }
 
 func (s *store) Watch(ctx context.Context, key string, opts storage.ListOptions) (watch.Interface, error) {
 	return nil, errors.ErrUnsupported
-}
-
-func (s *store) GetList(ctx context.Context, key string, opts storage.ListOptions, listObj runtime.Object) error {
-	return errors.ErrUnsupported
 }
 
 func (s *store) Stats(ctx context.Context) (storage.Stats, error) {

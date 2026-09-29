@@ -9,12 +9,12 @@ SPECIFICATION: [Solas specification](spec/solas.md)
 
   SECTION: [2.2. Items](#2-2-items)
     TEXT[!MUST,implementation]: An object item MUST have `pk` equal to `obj#` followed by the resource.
-    TEXT[!MUST,implementation]: An object item MUST have `sk` equal to its storage key without the
-    TEXT[!MUST,implementation]: resource prefix and the `/` after it.
-    TEXT[!MUST]: An object item MUST hold the resource version of its last write in the
-    TEXT[!MUST]: number attribute `rv`.
-    TEXT[!MUST]: An object item MUST hold the encoded object in the binary attribute
-    TEXT[!MUST]: `value`.
+    TEXT[!MUST,implementation]: An object item MUST have `sk` equal to the part of its storage key after
+    TEXT[!MUST,implementation]: the resource name.
+    TEXT[!MUST,implementation]: An object item MUST hold the resource version of its last write in the
+    TEXT[!MUST,implementation]: number attribute `rv`.
+    TEXT[!MUST,implementation]: An object item MUST hold the encoded object in the binary attribute
+    TEXT[!MUST,implementation]: `value`.
     TEXT[!MUST,implementation]: A counter item MUST have `pk` equal to `rv` and `sk` equal to the
     TEXT[!MUST,implementation]: resource.
     TEXT[!MUST]: A counter item MUST hold the last issued resource version in the number
@@ -22,52 +22,52 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: An event item MUST have `pk` equal to `ev#` followed by the resource.
     TEXT[!MUST,implementation]: An event item MUST have `sk` equal to its resource version as a decimal
     TEXT[!MUST,implementation]: string, padded with zeros to 20 digits.
-    TEXT[!MUST]: An event item MUST hold the event type in the attribute `type`.
+    TEXT[!MUST,implementation]: An event item MUST hold the event type in the attribute `type`.
     TEXT[!MUST]: The event type MUST be one of `ADDED`, `MODIFIED`, or `DELETED`.
-    TEXT[!MUST]: An event item MUST hold the encoded new object in `value`.
-    TEXT[!MUST]: An event item for a `MODIFIED` or `DELETED` event MUST hold the encoded
-    TEXT[!MUST]: previous object in `prev`.
-    TEXT[!MUST]: An event item MUST hold its expiry time, in Unix seconds, in `expires`.
+    TEXT[!MUST,implementation]: An event item MUST hold the encoded new object in `value`.
+    TEXT[!MUST,implementation]: An event item for a `MODIFIED` or `DELETED` event MUST hold the encoded
+    TEXT[!MUST,implementation]: previous object in `prev`.
+    TEXT[!MUST,implementation]: An event item MUST hold its expiry time, in Unix seconds, in `expires`.
 
   SECTION: [2.3. Writes](#2-3-writes)
-    TEXT[!MUST]: Every write MUST be one `TransactWriteItems` call.
-    TEXT[!MUST]: The call MUST hold three actions: a counter update, an object action, and
-    TEXT[!MUST]: an event put.
-    TEXT[!MUST]: The counter update MUST set `n` to `n + 1` on condition that `n` still
-    TEXT[!MUST]: has the value that the server read.
-    TEXT[!MUST]: If the counter item does not exist, the counter update MUST create it
-    TEXT[!MUST]: with `n` equal to 1, on condition that it still does not exist.
-    TEXT[!MUST]: For a create, the object action MUST be a put on condition that the
-    TEXT[!MUST]: object item does not exist.
-    TEXT[!MUST]: For an update, the object action MUST be a put on condition that `rv`
-    TEXT[!MUST]: equals the version that the server read.
-    TEXT[!MUST]: For a delete, the object action MUST be a delete on condition that `rv`
-    TEXT[!MUST]: equals the version that the server read.
-    TEXT[!MUST]: The event put MUST be on condition that the event item does not exist.
-    TEXT[!MUST]: Each call MUST set a `ClientRequestToken`.
-    TEXT[!MUST]: If the transaction fails only on the counter condition, the server MUST
-    TEXT[!MUST]: read the counter again and retry the same write.
-    TEXT[!SHOULD]: The server SHOULD wait a short random time before each such retry.
-    TEXT[!MUST]: If the transaction fails on the object condition of a create, the server
-    TEXT[!MUST]: MUST return `409 AlreadyExists`.
+    TEXT[!MUST,implementation]: Every write MUST be one `TransactWriteItems` call.
+    TEXT[!MUST,implementation]: The call MUST hold three actions: a counter update, an object action, and
+    TEXT[!MUST,implementation]: an event put.
+    TEXT[!MUST,implementation]: The counter update MUST set `n` to `n + 1` on condition that `n` still
+    TEXT[!MUST,implementation]: has the value that the server read.
+    TEXT[!MUST,implementation]: If the counter item does not exist, the counter update MUST create it
+    TEXT[!MUST,implementation]: with `n` equal to 1, on condition that it still does not exist.
+    TEXT[!MUST,implementation]: For a create, the object action MUST be a put on condition that the
+    TEXT[!MUST,implementation]: object item does not exist.
+    TEXT[!MUST,implementation]: For an update, the object action MUST be a put on condition that `rv`
+    TEXT[!MUST,implementation]: equals the version that the server read.
+    TEXT[!MUST,implementation]: For a delete, the object action MUST be a delete on condition that `rv`
+    TEXT[!MUST,implementation]: equals the version that the server read.
+    TEXT[!MUST,implementation]: The event put MUST be on condition that the event item does not exist.
+    TEXT[!MUST,implementation]: Each call MUST set a `ClientRequestToken`.
+    TEXT[!MUST,implementation]: If the transaction fails only on the counter condition, the server MUST
+    TEXT[!MUST,implementation]: read the counter again and retry the same write.
+    TEXT[!SHOULD,implementation]: The server SHOULD wait a short random time before each such retry.
+    TEXT[!MUST,implementation]: If the transaction fails on the object condition of a create, the server
+    TEXT[!MUST,implementation]: MUST return `409 AlreadyExists`.
     TEXT[!MUST]: If the transaction fails on the object condition of an update or a
     TEXT[!MUST]: delete, the server MUST return `409 Conflict`.
     TEXT[!MUST]: The server MUST reject a write whose event item would exceed the
     TEXT[!MUST]: DynamoDB item size limit.
-    TEXT[!MUST]: The server MUST return `413 RequestEntityTooLarge` for such a write.
+    TEXT[!MUST,implementation]: The server MUST return `413 RequestEntityTooLarge` for such a write.
 
   SECTION: [2.4. Reads](#2-4-reads)
-    TEXT[!MUST]: Every read of an object item MUST be a strongly consistent read.
-    TEXT[!MUST]: Every read of a counter item MUST be a strongly consistent read.
+    TEXT[!MUST,implementation]: Every read of an object item MUST be a strongly consistent read.
+    TEXT[!MUST,implementation]: Every read of a counter item MUST be a strongly consistent read.
     TEXT[!MUST]: Every query of an event log MUST be a strongly consistent query.
-    TEXT[!MUST]: A get MUST return the object from its object item.
-    TEXT[!MUST]: A list MUST read the counter before it queries the object items.
-    TEXT[!MUST]: A list MUST read the counter again after the query.
-    TEXT[!MUST]: If the two counter values differ, the list MUST retry.
-    TEXT[!MUST]: If the two counter values are equal, the list MUST return that value as
-    TEXT[!MUST]: its resource version.
-    TEXT[!MUST]: A request for a list at an older, exact resource version MUST be served
-    TEXT[!MUST]: by the watch cache, or it MUST fail with `410 Gone`.
+    TEXT[!MUST,implementation]: A get MUST return the object from its object item.
+    TEXT[!MUST,implementation]: A list MUST read the counter before it queries the object items.
+    TEXT[!MUST,implementation]: A list MUST read the counter again after the query.
+    TEXT[!MUST,implementation]: If the two counter values differ, the list MUST retry.
+    TEXT[!MUST,implementation]: If the two counter values are equal, the list MUST return that value as
+    TEXT[!MUST,implementation]: its resource version.
+    TEXT[!MUST,implementation]: A request for a list at an older, exact resource version MUST be served
+    TEXT[!MUST,implementation]: by the watch cache, or it MUST fail with `410 Gone`.
 
   SECTION: [3.1. Issue](#3-1-issue)
     TEXT[!MUST]: Each resource MUST have its own counter item.
@@ -81,16 +81,16 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST]: The server MUST NOT compare resource versions of two different resources.
 
   SECTION: [3.3. Objects](#3-3-objects)
-    TEXT[!MUST]: The `metadata.resourceVersion` of an object MUST equal the version of the
-    TEXT[!MUST]: write that last changed it.
-    TEXT[!MUST]: The `rv` attribute of the object item MUST equal the same version.
-    TEXT[!MUST]: The object in a `DELETED` event MUST carry the version of the delete.
+    TEXT[!MUST,implementation]: The `metadata.resourceVersion` of an object MUST equal the version of the
+    TEXT[!MUST,implementation]: write that last changed it.
+    TEXT[!MUST,implementation]: The `rv` attribute of the object item MUST equal the same version.
+    TEXT[!MUST,implementation]: The object in a `DELETED` event MUST carry the version of the delete.
     TEXT[!MUST]: The server MUST encode each resource version as a decimal string.
 
   SECTION: [4.1. Event log](#4-1-event-log)
-    TEXT[!MUST]: Each write MUST add one event item to the event log of its resource.
-    TEXT[!MUST]: The event item MUST have the same resource version as the write.
-    TEXT[!MUST]: An event item MUST expire a set retention time after its write.
+    TEXT[!MUST,implementation]: Each write MUST add one event item to the event log of its resource.
+    TEXT[!MUST,implementation]: The event item MUST have the same resource version as the write.
+    TEXT[!MUST,implementation]: An event item MUST expire a set retention time after its write.
     TEXT[!MUST,implementation]: The retention time MUST be a setting of the API server.
     TEXT[!MUST]: The server MUST NOT depend on the time at which DynamoDB deletes an
     TEXT[!MUST]: expired item.

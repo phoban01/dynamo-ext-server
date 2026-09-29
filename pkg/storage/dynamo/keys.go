@@ -37,36 +37,31 @@ func eventSK(rv uint64) string {
 	return fmt.Sprintf("%020d", rv)
 }
 
-// = spec/solas.md#2-2-items
-// # An object item MUST have `sk` equal to its storage key without the
-// # resource prefix and the `/` after it.
-//
+//= spec/solas.md#2-2-items
+//# An object item MUST have `sk` equal to the part of its storage key after
+//# the resource name.
+
 // sortKey maps a storage key to the sort key of its object item. The sort
-// key is the part of the key after the resource prefix, for example
-// "ns/name" for "/pods/ns/name". For a recursive key the result is a
-// prefix and can be empty.
+// key starts with "/", for example "/ns/name" for "/pods/ns/name". For a
+// recursive key the result is a prefix.
 func (s *store) sortKey(key string, recursive bool) (string, error) {
 	prepared, err := storage.PrepareKey(s.resourcePrefix, key, recursive)
 	if err != nil {
 		return "", err
 	}
-	rest := strings.TrimPrefix(prepared, s.resourcePrefix)
-	if !strings.HasSuffix(s.resourcePrefix, "/") {
-		if rest != "" && !strings.HasPrefix(rest, "/") {
-			return "", fmt.Errorf("invalid key: %q lacks resource prefix: %q", key, s.resourcePrefix)
-		}
-		rest = strings.TrimPrefix(rest, "/")
-	}
-	if !recursive && rest == "" {
-		return "", fmt.Errorf("invalid key: %q names no object", key)
+	rest := strings.TrimPrefix(prepared, s.base())
+	if !strings.HasPrefix(rest, "/") {
+		return "", fmt.Errorf("invalid key: %q lacks resource prefix: %q", key, s.resourcePrefix)
 	}
 	return rest, nil
 }
 
 // storageKey maps a sort key back to its storage key.
 func (s *store) storageKey(sk string) string {
-	if strings.HasSuffix(s.resourcePrefix, "/") {
-		return s.resourcePrefix + sk
-	}
-	return s.resourcePrefix + "/" + sk
+	return s.base() + sk
+}
+
+// base is the resource prefix with no trailing "/".
+func (s *store) base() string {
+	return strings.TrimSuffix(s.resourcePrefix, "/")
 }

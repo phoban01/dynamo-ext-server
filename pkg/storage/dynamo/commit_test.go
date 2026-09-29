@@ -47,15 +47,15 @@ func TestCommitSequence(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
 
-	rv1, err := s.commit(ctx, write{sk: "a", action: actCreate, value: []byte("1")})
+	rv1, err := s.commit(ctx, write{sk: "/a", action: actCreate, value: []byte("1")})
 	if err != nil || rv1 != 1 {
 		t.Fatalf("create = %d, %v; want 1, nil", rv1, err)
 	}
-	rv2, err := s.commit(ctx, write{sk: "a", action: actUpdate, expectRV: 1, value: []byte("2"), prev: []byte("1")})
+	rv2, err := s.commit(ctx, write{sk: "/a", action: actUpdate, expectRV: 1, value: []byte("2"), prev: []byte("1")})
 	if err != nil || rv2 != 2 {
 		t.Fatalf("update = %d, %v; want 2, nil", rv2, err)
 	}
-	rv3, err := s.commit(ctx, write{sk: "a", action: actDelete, expectRV: 2, value: []byte("2"), prev: []byte("2")})
+	rv3, err := s.commit(ctx, write{sk: "/a", action: actDelete, expectRV: 2, value: []byte("2"), prev: []byte("2")})
 	if err != nil || rv3 != 3 {
 		t.Fatalf("delete = %d, %v; want 3, nil", rv3, err)
 	}
@@ -68,17 +68,17 @@ func TestCommitObjectConflict(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
 
-	if _, err := s.commit(ctx, write{sk: "a", action: actCreate, value: []byte("1")}); err != nil {
+	if _, err := s.commit(ctx, write{sk: "/a", action: actCreate, value: []byte("1")}); err != nil {
 		t.Fatal(err)
 	}
 	tests := []struct {
 		name string
 		w    write
 	}{
-		{"create existing", write{sk: "a", action: actCreate, value: []byte("x")}},
-		{"update stale", write{sk: "a", action: actUpdate, expectRV: 7, value: []byte("x"), prev: []byte("1")}},
-		{"delete stale", write{sk: "a", action: actDelete, expectRV: 7, value: []byte("1"), prev: []byte("1")}},
-		{"update missing", write{sk: "b", action: actUpdate, expectRV: 1, value: []byte("x"), prev: []byte("1")}},
+		{"create existing", write{sk: "/a", action: actCreate, value: []byte("x")}},
+		{"update stale", write{sk: "/a", action: actUpdate, expectRV: 7, value: []byte("x"), prev: []byte("1")}},
+		{"delete stale", write{sk: "/a", action: actDelete, expectRV: 7, value: []byte("1"), prev: []byte("1")}},
+		{"update missing", write{sk: "/b", action: actUpdate, expectRV: 1, value: []byte("x"), prev: []byte("1")}},
 	}
 	for _, tt := range tests {
 		if _, err := s.commit(ctx, tt.w); !errors.Is(err, errObjectConflict) {
@@ -101,7 +101,7 @@ func TestCommitConcurrentWritersHaveNoGaps(t *testing.T) {
 	for w := range writers {
 		wg.Go(func() {
 			for i := range each {
-				rv, err := s.commit(ctx, write{sk: fmt.Sprintf("w%d-%d", w, i), action: actCreate, value: []byte("x")})
+				rv, err := s.commit(ctx, write{sk: fmt.Sprintf("/w%d-%d", w, i), action: actCreate, value: []byte("x")})
 				if err != nil {
 					t.Error(err)
 					return
