@@ -1,7 +1,7 @@
 SPECIFICATION: [Solas specification](spec/solas.md)
   SECTION: [2.1. Table](#2-1-table)
-    TEXT[!MUST]: All member clusters MUST use the same table.
-    TEXT[!MUST]: The table MUST be in one AWS region.
+    TEXT[!MUST,implementation]: All member clusters MUST use the same table.
+    TEXT[!MUST,implementation]: The table MUST be in one AWS region.
     TEXT[!MUST,implementation,test]: The table MUST have a string partition key named `pk` and a string sort
     TEXT[!MUST,implementation,test]: key named `sk`.
     TEXT[!MUST,implementation,test]: The table MUST enable TTL on the attribute `expires`.
@@ -110,8 +110,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!SHOULD,implementation]: The server SHOULD poll each resource at least once each second.
     TEXT[!SHOULD,implementation]: The server SHOULD NOT poll a resource more often than every 100
     TEXT[!SHOULD,implementation]: milliseconds.
-    TEXT[!SHOULD]: The server SHOULD run one poller for each resource and share it between
-    TEXT[!SHOULD]: watchers.
+    TEXT[!SHOULD,implementation]: The server SHOULD run one poller for each resource and share it between
+    TEXT[!SHOULD,implementation]: watchers.
 
   SECTION: [4.3. Gaps](#4-3-gaps)
     TEXT[!MUST,implementation,test]: If the query result does not hold each version from `last + 1` to `c`
@@ -123,31 +123,32 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: It MUST then continue from the version of the list.
 
   SECTION: [5.1. Resource](#5-1-resource)
-    TEXT[!MUST]: `Device` MUST be a cluster-scoped resource in the group `solas.dev`,
-    TEXT[!MUST]: version `v1alpha1`.
-    TEXT[!MUST]: The solas API server MUST serve `Device` from the table.
-    TEXT[!MUST]: `Device` MUST have a `status` subresource.
+    TEXT[!MUST,implementation]: `Device` MUST be a cluster-scoped resource in the group `solas.dev`,
+    TEXT[!MUST,implementation]: version `v1alpha1`.
+    TEXT[!MUST,implementation]: The solas API server MUST serve `Device` from the table.
+    TEXT[!MUST,implementation]: `Device` MUST have a `status` subresource.
 
   SECTION: [5.2. Claim reference](#5-2-claim-reference)
-    TEXT[!MUST]: A `claimRef` MUST hold the member name, the member UID, the claim
-    TEXT[!MUST]: namespace, the claim name, and the claim UID.
+    TEXT[!MUST,implementation]: A `claimRef` MUST hold the member name, the member UID, the claim
+    TEXT[!MUST,implementation]: namespace, the claim name, and the claim UID.
 
   SECTION: [5.3. Status updates](#5-3-status-updates)
-    TEXT[!MUST]: The server MUST NOT accept an unconditional update of `Device` status.
-    TEXT[!MUST]: Each status update MUST carry the resource version that the client read.
-    TEXT[!MUST]: The server MUST reject a status update that changes `claimRef` from one
-    TEXT[!MUST]: holder to a different holder.
-    TEXT[!MUST]: To move a device, a client MUST first clear `claimRef` and then set it
-    TEXT[!MUST]: in a second update.
-    TEXT[!MUST]: The server MUST reject a status update that sets a `claimRef` with an
-    TEXT[!MUST]: empty field.
-    TEXT[!MUST]: A spec update MUST NOT change `status`.
-    TEXT[!MUST]: A status update MUST NOT change `spec`.
+    TEXT[!MUST,implementation]: The server MUST NOT accept an unconditional update of `Device` status.
+    TEXT[!MUST,implementation,test]: Each status update MUST carry the resource version that the client read.
+    TEXT[!MUST,implementation,test]: The server MUST reject a status update that changes `claimRef` from one
+    TEXT[!MUST,implementation,test]: holder to a different holder.
+    TEXT[implementation]: A holder is different when any field of `claimRef` differs.
+    TEXT[!MUST,implementation]: To move a device, a client MUST first clear `claimRef` and then set it
+    TEXT[!MUST,implementation]: in a second update.
+    TEXT[!MUST,implementation,test]: The server MUST reject a status update that sets a `claimRef` with an
+    TEXT[!MUST,implementation,test]: empty field.
+    TEXT[!MUST,implementation,test]: A spec update MUST NOT change `status`.
+    TEXT[!MUST,implementation,test]: A status update MUST NOT change `spec`.
 
   SECTION: [5.4. Delete](#5-4-delete)
-    TEXT[!MUST]: The server MUST reject a delete of a bound device.
-    TEXT[!MUST]: The server MUST check this on the state that the delete removes, using
-    TEXT[!MUST]: the delete condition on `rv` from section 2.3.
+    TEXT[!MUST,implementation,test]: The server MUST reject a delete of a bound device.
+    TEXT[!MUST,implementation]: The server MUST check this on the state that the delete removes, using
+    TEXT[!MUST,implementation]: the delete condition on `rv` from section 2.3.
 
   SECTION: [6.1. Resource](#6-1-resource)
     TEXT[!MUST]: `DeviceClaim` MUST be a namespaced CRD in the group `solas.dev`, version
@@ -223,12 +224,12 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST]: Workloads MUST use a device only while its claim is in effect.
 
   SECTION: [7.1. Resource](#7-1-resource)
-    TEXT[!MUST]: `Member` MUST be a cluster-scoped resource in the group `solas.dev`,
-    TEXT[!MUST]: version `v1alpha1`.
-    TEXT[!MUST]: The solas API server MUST serve `Member` from the table.
+    TEXT[!MUST,implementation]: `Member` MUST be a cluster-scoped resource in the group `solas.dev`,
+    TEXT[!MUST,implementation]: version `v1alpha1`.
+    TEXT[!MUST,implementation]: The solas API server MUST serve `Member` from the table.
     TEXT[!MUST]: The name of a `Member` MUST be the cluster ID of its member cluster.
-    TEXT[!MUST]: `Member.spec.leaseDurationSeconds` MUST hold the lease duration `D`.
-    TEXT[!MUST]: `Member.status.phase` MUST be `Active` or `Draining`.
+    TEXT[!MUST,implementation]: `Member.spec.leaseDurationSeconds` MUST hold the lease duration `D`.
+    TEXT[!MUST,implementation]: `Member.status.phase` MUST be `Active` or `Draining`.
 
   SECTION: [7.2. Join](#7-2-join)
     TEXT[!MUST]: A member cluster MUST create its `Member` before it binds any device.

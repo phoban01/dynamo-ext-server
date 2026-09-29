@@ -1,0 +1,48 @@
+# One dynamodb-local for a single-cluster run. It keeps data in memory.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dynamodb-local
+  namespace: solas-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dynamodb-local
+  template:
+    metadata:
+      labels:
+        app: dynamodb-local
+    spec:
+      containers:
+        - name: dynamodb-local
+          image: amazon/dynamodb-local:3.3.1
+          args: ["-jar", "DynamoDBLocal.jar", "-inMemory"]
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            tcpSocket: {port: 8000}
+          resources:
+            requests: {cpu: 50m, memory: 256Mi}
+            limits: {memory: 512Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dynamodb-local
+  namespace: solas-system
+spec:
+  selector:
+    app: dynamodb-local
+  ports:
+    - port: 8000
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: solas-dynamodb
+  namespace: solas-system
+stringData:
+  endpoint: http://dynamodb-local.solas-system.svc:8000
+  accessKeyID: local
+  secretAccessKey: local

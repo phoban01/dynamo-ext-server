@@ -1,0 +1,7 @@
+.devbox/
+.duvet/
+_apalache-out/
+quint/
+docs/
+spec/
+.git/
