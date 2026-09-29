@@ -17,5 +17,16 @@
     "JAVA_TOOL_OPTIONS": "-Xmx3g",
     "GOFLAGS": "-p=4",
     "SIM_SHARDS": "4"
+  },
+  "shell": {
+    "scripts": {
+      "test": "scripts/test.sh",
+      "sim-gate": "scripts/sim-gate.sh",
+      "e2e": "scripts/e2e.sh",
+      "verify": [
+        "scripts/test.sh",
+        "scripts/quint-check.sh"
+      ]
+    }
   }
 }
