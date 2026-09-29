@@ -1,3 +1,5 @@
+// Package controller builds solas-controller: the member manager, the
+// claim reconciler, and the sweeper, spec sections 6 to 8.
 package controller
 
 import (

@@ -18,7 +18,7 @@ import (
 
 	claimsv1alpha1 "github.com/phoban01/solas/pkg/apis/claims/v1alpha1"
 	solasv1alpha1 "github.com/phoban01/solas/pkg/apis/solas/v1alpha1"
-	"github.com/phoban01/solas/pkg/controller"
+	"github.com/phoban01/solas/pkg/controller/scheme"
 )
 
 // NewClient returns a fake client with the objects. It gives each created
@@ -26,7 +26,7 @@ import (
 // holder needs a free device, and a bind raises the fencing token.
 func NewClient(objs ...client.Object) client.WithWatch {
 	return fake.NewClientBuilder().
-		WithScheme(controller.NewScheme()).
+		WithScheme(scheme.New()).
 		WithObjects(objs...).
 		WithStatusSubresource(&solasv1alpha1.Device{}, &solasv1alpha1.Member{}, &claimsv1alpha1.DeviceClaim{}).
 		WithInterceptorFuncs(interceptor.Funcs{
