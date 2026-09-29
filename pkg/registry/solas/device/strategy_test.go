@@ -22,7 +22,7 @@ func dev(desc string, ref *solas.ClaimRef) *solas.Device {
 
 func TestStrategiesAreConditional(t *testing.T) {
 	s := NewStrategy(runtime.NewScheme())
-	if s.AllowUnconditionalUpdate() || NewStatusStrategy(s).AllowUnconditionalUpdate() {
+	if s.AllowUnconditionalUpdate(context.Background()) || NewStatusStrategy(s).AllowUnconditionalUpdate(context.Background()) {
 		t.Error("device updates must carry a resource version")
 	}
 	if s.NamespaceScoped() {

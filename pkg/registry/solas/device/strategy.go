@@ -63,7 +63,7 @@ func (strategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorLis
 
 func (strategy) WarningsOnCreate(ctx context.Context, obj runtime.Object) []string { return nil }
 
-func (strategy) AllowCreateOnUpdate() bool { return false }
+func (strategy) AllowCreateOnUpdate(context.Context) bool { return false }
 
 //= spec/solas.md#5-3-status-updates
 //# The server MUST NOT accept an unconditional update of `Device` status.
@@ -71,7 +71,7 @@ func (strategy) AllowCreateOnUpdate() bool { return false }
 //= spec/solas.md#5-3-status-updates
 //# Each status update MUST carry the resource version that the client read.
 
-func (strategy) AllowUnconditionalUpdate() bool { return false }
+func (strategy) AllowUnconditionalUpdate(context.Context) bool { return false }
 
 func (strategy) Canonicalize(obj runtime.Object) {}
 
