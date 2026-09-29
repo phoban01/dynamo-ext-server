@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.16.0/.schema/devbox.schema.json",
+  "packages": [
+    "go@1.26",
+    "nodejs@22",
+    "quint@0.32.0",
+    "jdk17@latest",
+    "kind@latest",
+    "kubectl@latest",
+    "awscli2@latest",
+    "rustup@latest",
+    "golangci-lint@latest",
+    "util-linux@latest"
+  ]
+}
