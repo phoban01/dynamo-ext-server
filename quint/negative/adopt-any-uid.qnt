@@ -15,6 +15,7 @@ module adopt_any_uid {
     unconditionalBind: false,
     membersFirst: false,
     adoptAnyUid: true,
+    noTokenCheck: false,
   }).* from "../solas"
 
   // Random search does not reach this bug, so a test plays it step by step.

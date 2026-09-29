@@ -6,7 +6,8 @@ module solas {
   type ClaimRef = { member: str, muid: int, claim: str }
   type OptRef = Held(ClaimRef) | Free
 
-  type Device = { rv: int, ref: OptRef }
+  // token is the fencing token of the last bind, spec 5.3.
+  type Device = { rv: int, ref: OptRef, token: int }
 
   // A Member object in the table, spec 7.1.
   type MemberObj = { exists: bool, uid: int, rv: int }
@@ -18,6 +19,8 @@ module solas {
     phase: str,
     dev: str,
     muid: int,
+    // The fencing token of the bind, spec 6.3.
+    token: int,
   }
 
   // What an observer saw of another Member, spec 8.1. rv -1 means none.
@@ -44,6 +47,12 @@ module solas {
   // A bind write in flight from a controller to the table.
   type BindMsg = { cluster: str, claim: str, dev: str, rv: int, muid: int }
 
+  // A use of a device that the device accepted.
+  type Use = { token: int, claim: str }
+
+  // A bind: the claim that got a token of a device.
+  type Binding = { dev: str, token: int, claim: str }
+
   type Config = {
     clusters: Set[str],
     devices: Set[str],
@@ -58,6 +67,7 @@ module solas {
     unconditionalBind: bool,
     membersFirst: bool,
     adoptAnyUid: bool,
+    noTokenCheck: bool,
   }
 
   type State = {
@@ -73,6 +83,14 @@ module solas {
     // Ghost flags for the witnesses.
     cleared: bool,
     someLeft: bool,
+    // Device side of fencing, spec 6.6: the highest accepted token and
+    // the last accepted use of each device.
+    highest: str -> int,
+    lastUse: str -> Use,
+    // Ghosts for the fencing invariants and witness.
+    bindings: Set[Binding],
+    staleAccepted: bool,
+    staleRejected: bool,
   }
 
   const CFG: Config
@@ -80,6 +98,7 @@ module solas {
   var s: State
 
   pure val NOSEEN: Seen = { rv: -1, at: 0 }
+  pure val NOUSE: Use = { token: 0, claim: "" }
 
   pure def initCluster(cfg: Config, c: str): Cluster = {
     up: true,
@@ -94,24 +113,29 @@ module solas {
     draining: false,
     seen: cfg.clusters.mapBy(_ => NOSEEN),
     sweepPhase: 0,
-    sweepDevs: cfg.devices.mapBy(_ => { rv: 0, ref: Free }),
+    sweepDevs: cfg.devices.mapBy(_ => { rv: 0, ref: Free, token: 0 }),
     sweepUids: Set(),
   }
 
   action init = s' = {
     now: 0,
-    devices: CFG.devices.mapBy(_ => { rv: 0, ref: Free }),
+    devices: CFG.devices.mapBy(_ => { rv: 0, ref: Free, token: 0 }),
     devCounter: 0,
     members: CFG.clusters.mapBy(_ => { exists: false, uid: 0, rv: 0 }),
     memberCounter: 0,
     nextUid: 1,
     clusters: CFG.clusters.mapBy(c => initCluster(CFG, c)),
     claims: CFG.claims.mapBy(_ => {
-      exists: true, deleting: false, phase: "Pending", dev: "", muid: 0,
+      exists: true, deleting: false, phase: "Pending", dev: "", muid: 0, token: 0,
     }),
     inflight: Set(),
     cleared: false,
     someLeft: false,
+    highest: CFG.devices.mapBy(_ => 0),
+    lastUse: CFG.devices.mapBy(_ => NOUSE),
+    bindings: Set(),
+    staleAccepted: false,
+    staleRejected: false,
   }
 
   // ---- Time, spec 7.5 ----
@@ -386,7 +410,7 @@ module solas {
       s.devices.get(d).rv == listed.rv,
       s' = {
         ...s,
-        devices: s.devices.set(d, { rv: rv, ref: Free }),
+        devices: s.devices.set(d, { ...s.devices.get(d), rv: rv, ref: Free }),
         devCounter: rv,
         cleared: true,
       },
@@ -412,7 +436,8 @@ module solas {
   // Set the device ref and give the write a new rv.
   def writeRef(d: str, ref: OptRef): State = {
     val rv = s.devCounter + 1
-    { ...s, devices: s.devices.set(d, { rv: rv, ref: ref }), devCounter: rv }
+    val dv = s.devices.get(d)
+    { ...s, devices: s.devices.set(d, { ...dv, rv: rv, ref: ref }), devCounter: rv }
   }
 
   // Put a bind in flight. The rv comes from a consistent read. The
@@ -449,14 +474,51 @@ module solas {
     val ok = CFG.unconditionalBind
       or (dv.rv == msg.rv and (isFree(dv.ref) or dv.ref == ref))
     val rest = s.inflight.exclude(Set(msg))
+    // A bind of a free device gets the old token plus 1, spec 5.3.
+    val token = if (isFree(dv.ref)) dv.token + 1 else dv.token
+    val written = writeRef(msg.dev, ref)
     all {
       s.inflight.contains(msg),
       if (ok)
-        s' = { ...writeRef(msg.dev, ref), inflight: rest }
+        s' = {
+          ...written,
+          devices: written.devices.set(msg.dev, { ...written.devices.get(msg.dev), token: token }),
+          bindings: s.bindings.union(Set({ dev: msg.dev, token: token, claim: msg.claim })),
+          inflight: rest,
+        }
       else
         s' = { ...s, inflight: rest },
     }
   }
+
+  // ---- Device use, spec 6.6 ----
+
+  // A workload uses the device of a Bound claim with the claim's token. It
+  // acts on the phase it last saw, even when its member is no longer live,
+  // as a paused workload would. The device accepts a token equal to or
+  // higher than the highest it has accepted.
+  action use(k: str): bool = {
+    val cl = s.clusters.get(CFG.owner.get(k))
+    val cm = s.claims.get(k)
+    val d = cm.dev
+    val accept = CFG.noTokenCheck or cm.token >= s.highest.get(d)
+    all {
+      active(cl),
+      cm.exists,
+      cm.phase == "Bound",
+      if (accept)
+        s' = {
+          ...s,
+          highest: s.highest.set(d, max(s.highest.get(d), cm.token)),
+          lastUse: s.lastUse.set(d, { token: cm.token, claim: k }),
+          staleAccepted: s.staleAccepted or cm.token < s.lastUse.get(d).token,
+        }
+      else
+        s' = { ...s, staleRejected: true },
+    }
+  }
+
+  pure def max(a: int, b: int): int = if (a > b) a else b
 
   action landSome = all {
     s.inflight.size() > 0,
@@ -481,7 +543,9 @@ module solas {
       if (CFG.adoptAnyUid) names(ref, k) else namesWith(ref, k, cl.uid),
       s' = {
         ...s,
-        claims: s.claims.set(k, { ...cm, phase: "Bound", dev: d, muid: cl.uid }),
+        claims: s.claims.set(k, {
+          ...cm, phase: "Bound", dev: d, muid: cl.uid, token: s.devices.get(d).token,
+        }),
       },
     }
   }
@@ -654,7 +718,25 @@ module solas {
     )
   )
 
-  val safety = noDoubleBind and claimMatchesDevice and leaseSafety
+  // Each fencing token of a device belongs to one bind, spec 8.4.
+  val tokensUnique = s.bindings.forall(b1 => s.bindings.forall(b2 =>
+    (b1.dev == b2.dev and b1.token == b2.token) implies b1.claim == b2.claim
+  ))
+
+  // A device never accepts a use from an older bind after it has accepted
+  // a use from a newer bind, spec 8.4.
+  val usesInOrder = not(s.staleAccepted)
+
+  // The last accepted use of a device comes from the claim that got its
+  // token in a bind.
+  val useMatchesBinding = CFG.devices.forall(d => {
+    val u = s.lastUse.get(d)
+    u == NOUSE or s.bindings.contains({ dev: d, token: u.token, claim: u.claim })
+  })
+
+  val fencing = tokensUnique and usesInOrder and useMatchesBinding
+
+  val safety = noDoubleBind and claimMatchesDevice and leaseSafety and fencing
 
   // ---- Witnesses ----
   // Each witness must be violated in a run. A violation shows that the
@@ -664,6 +746,9 @@ module solas {
   val witnessCleared = not(s.cleared)
   val witnessLost = CFG.claims.forall(k => s.claims.get(k).phase != "Lost")
   val witnessLeft = not(s.someLeft)
+  // A device rejects a use with a stale token. Random runs rarely reach
+  // it, so fencingTest plays it step by step.
+  val witnessStaleRejected = not(s.staleRejected)
 
   action step = any {
     nondet c = CFG.clusters.oneOf()
@@ -685,6 +770,7 @@ module solas {
       startDrain(c),
       drainRelease(k, d),
       finishLeave(c),
+      use(k),
       join(c),
       renewSend(c),
       renewLand(c),
@@ -716,6 +802,7 @@ module solas2 {
     unconditionalBind: false,
     membersFirst: false,
     adoptAnyUid: false,
+    noTokenCheck: false,
   }).*
 
   pure val fastB = Map("a" -> 0, "b" -> 1)
@@ -767,4 +854,33 @@ module solas2 {
       .then(renewLand("a"))
       .then(join("a"))
       .then(adopt("a1", "d1").fail())
+
+  // Holder a uses d1, then stops renewing while its workload still sees
+  // Bound. b reclaims d1, binds it, and uses it. Then a's workload tries
+  // again with its old token, and the device rejects it.
+  run fencingTest =
+    init
+      .then(join("a"))
+      .then(bindSend("a1", "d1"))
+      .then(bindLand({ cluster: "a", claim: "a1", dev: "d1", rv: 0, muid: 1 }))
+      .then(adopt("a1", "d1"))
+      .then(use("a1"))
+      .then(observe("b", "a"))
+      .then(tickBy(fastB))
+      .then(tickBy(fastB))
+      .then(tickBy(fastB))
+      .then(sweepDelete("b", "a"))
+      .then(sweepListDevices("b"))
+      .then(sweepListMembers("b"))
+      .then(sweepClear("b", "d1"))
+      .then(join("b"))
+      .then(bindSend("b1", "d1"))
+      .then(bindLand({ cluster: "b", claim: "b1", dev: "d1", rv: 2, muid: 2 }))
+      .then(adopt("b1", "d1"))
+      .expect(s.claims.get("a1").token == 1 and s.claims.get("b1").token == 2)
+      .then(use("b1"))
+      // a1 is still Bound in a's etcd, so its workload tries again.
+      .expect(s.claims.get("a1").phase == "Bound")
+      .then(use("a1"))
+      .expect(s.staleRejected and s.lastUse.get("d1").claim == "b1" and safety)
 }

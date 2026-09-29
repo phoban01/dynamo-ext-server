@@ -15,5 +15,6 @@ module no_margin {
     unconditionalBind: false,
     membersFirst: false,
     adoptAnyUid: false,
+    noTokenCheck: false,
   }).* from "../solas"
 }

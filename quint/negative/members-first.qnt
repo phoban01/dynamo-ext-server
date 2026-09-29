@@ -15,5 +15,6 @@ module members_first {
     unconditionalBind: false,
     membersFirst: true,
     adoptAnyUid: false,
+    noTokenCheck: false,
   }).* from "../solas"
 }
