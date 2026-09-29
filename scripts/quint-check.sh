@@ -58,8 +58,13 @@ pass "test solas2" quint test quint/solas.qnt --main solas2
 # The test passes when its scenario breaks claimMatchesDevice.
 pass "negative adopt-any-uid" quint test quint/negative/adopt-any-uid.qnt \
   --main adopt_any_uid
+# The test passes when its scenario breaks usesInOrder.
+pass "negative no-token-check" quint test quint/negative/no-token-check.qnt \
+  --main no_token_check
 
 pass "run solas2 safety" run quint/solas.qnt --main solas2 --invariant safety
+# Fencing does not depend on the lease margin: it holds even when M = 0.
+pass "run no-margin fencing" run quint/negative/no-margin.qnt --invariant fencing
 pass "run store3 storeSafety" run quint/store.qnt --main store3 --invariant storeSafety
 
 for w in witnessBound witnessCleared witnessLost witnessLeft; do
