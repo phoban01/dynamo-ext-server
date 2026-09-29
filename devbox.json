@@ -32,6 +32,7 @@
       "test": "scripts/test.sh",
       "sim-gate": "scripts/sim-gate.sh",
       "e2e": "scripts/e2e.sh",
+      "smoke": "scripts/smoke.sh",
       "codegen": "hack/update-codegen.sh",
       "image": "docker build -t solas-apiserver:dev .",
       "duvet-install": "scripts/duvet-install.sh",
