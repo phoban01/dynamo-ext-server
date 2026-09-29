@@ -11,5 +11,11 @@
     "rustup@latest",
     "golangci-lint@latest",
     "util-linux@latest"
-  ]
+  ],
+  "env": {
+    "JVM_ARGS": "-Xmx3g",
+    "JAVA_TOOL_OPTIONS": "-Xmx3g",
+    "GOFLAGS": "-p=4",
+    "SIM_SHARDS": "4"
+  }
 }
