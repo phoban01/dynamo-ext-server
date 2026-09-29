@@ -217,7 +217,125 @@ It MUST then continue from the version of the list.
 
 ## 5. Device
 
+### 5.1. Resource
+
+`Device` MUST be a cluster-scoped resource in the group `solas.dev`,
+version `v1alpha1`.
+The solas API server MUST serve `Device` from the table.
+`Device` MUST have a `status` subresource.
+Claims select devices by their labels.
+`Device.spec.description` holds free text that describes the device.
+
+### 5.2. Claim reference
+
+`Device.status.claimRef` names the holder of the device.
+A `claimRef` MUST hold the member name, the member UID, the claim
+namespace, the claim name, and the claim UID.
+A device is free when it has no `claimRef`.
+A device is bound when it has a `claimRef`.
+
+### 5.3. Status updates
+
+The server MUST NOT accept an unconditional update of `Device` status.
+Each status update MUST carry the resource version that the client read.
+The server MUST reject a status update that changes `claimRef` from one
+holder to a different holder.
+A holder is different when any field of `claimRef` differs.
+To move a device, a client MUST first clear `claimRef` and then set it
+in a second update.
+The server MUST reject a status update that sets a `claimRef` with an
+empty field.
+
+A spec update MUST NOT change `status`.
+A status update MUST NOT change `spec`.
+
+### 5.4. Delete
+
+The server MUST reject a delete of a bound device.
+The server MUST check this on the state that the delete removes, using
+the delete condition on `rv` from section 2.3.
+So a bind that commits before the delete makes the delete fail.
+
 ## 6. Claim
+
+### 6.1. Resource
+
+`DeviceClaim` MUST be a namespaced CRD in the group `solas.dev`, version
+`v1alpha1`.
+Each member cluster MUST store its claims in its own etcd.
+`DeviceClaim.spec.selector` MUST be a label selector over `Device`
+labels.
+`DeviceClaim.status.phase` MUST be one of `Pending`, `Bound`,
+`Suspended`, or `Lost`.
+`DeviceClaim.status.deviceName` names the bound device.
+`DeviceClaim.status.memberUID` records the member UID that bound the
+claim.
+
+### 6.2. Controller
+
+Each member cluster MUST run at most one active claim controller.
+The controller MUST use a leader election lease in its own cluster.
+The controller MUST NOT bind while its member is not live by its own
+clock, as section 7.4 defines.
+The controller MUST NOT bind while its member is draining.
+
+### 6.3. Bind
+
+The controller MUST NOT bind a claim that has a deletion timestamp.
+Before it binds a claim, the controller MUST add the finalizer
+`solas.dev/release` to the claim.
+Before it picks a device, the controller MUST do a consistent list of
+devices.
+If a device in that list has a `claimRef` with the claim UID, the
+controller MUST adopt that device and MUST NOT bind another.
+This covers a crash after the device write and before the claim write.
+
+The controller MUST pick a device from the free devices that match the
+selector.
+The controller SHOULD pick at random among the matching devices.
+Random choice lowers the chance that two clusters pick the same device.
+
+The bind MUST be a status update of the device that sets `claimRef`.
+The bind MUST carry the resource version from the consistent list.
+The `claimRef` MUST hold the UID of the member's current `Member`.
+If the bind fails with `409 Conflict`, the controller MUST list again
+and MUST NOT retry with the old version.
+
+After a successful bind, the controller MUST set the claim phase to
+`Bound`.
+It MUST also set `status.deviceName` and `status.memberUID`.
+
+If more than one device has a `claimRef` with the same claim UID, the
+controller MUST keep the device with the lowest name.
+It MUST release the other devices as section 6.4 describes.
+This can happen when an old leader's write lands after a new leader's
+list.
+
+### 6.4. Release
+
+When a claim has a deletion timestamp, the controller MUST release its
+device.
+To release, the controller MUST do a consistent list of devices.
+For each device whose `claimRef` has the claim UID, the controller MUST
+clear `claimRef` with a status update.
+That update MUST carry the resource version from the list.
+If the update fails with `409 Conflict`, the controller MUST list again.
+The controller MUST NOT change a device whose `claimRef` does not have
+the claim UID.
+After the release, the controller MUST remove the finalizer.
+
+### 6.5. Phases
+
+A new claim MUST start in phase `Pending`.
+When the controller's member is not live by its own clock, the
+controller MUST set each `Bound` claim to `Suspended`.
+When the member renews its lease, the controller MUST set each
+`Suspended` claim back to `Bound` if its device still names it.
+When the controller finds that its member UID changed, it MUST set each
+claim with the old `status.memberUID` to `Lost`.
+A `Lost` claim MUST NOT bind again.
+A user deletes a `Lost` claim to free its finalizer.
+Workloads SHOULD use a device only while its claim is `Bound`.
 
 ## 7. Membership
 
