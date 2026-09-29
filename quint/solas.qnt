@@ -510,6 +510,118 @@ module solas {
     }
   }
 
+  // ---- Claim phases, delete, and release, spec 6.4 and 6.5 ----
+
+  action suspend(k: str): bool = {
+    val c = CFG.owner.get(k)
+    val cl = s.clusters.get(c)
+    val cm = s.claims.get(k)
+    all {
+      active(cl),
+      cm.phase == "Bound",
+      not(localLive(c)) or cl.draining,
+      s' = { ...s, claims: s.claims.set(k, { ...cm, phase: "Suspended" }) },
+    }
+  }
+
+  action resume(k: str): bool = {
+    val c = CFG.owner.get(k)
+    val cl = s.clusters.get(c)
+    val cm = s.claims.get(k)
+    all {
+      localLive(c),
+      not(cl.draining),
+      cm.exists,
+      not(cm.deleting),
+      cm.phase == "Suspended",
+      cm.muid == cl.uid,
+      namesWith(s.devices.get(cm.dev).ref, k, cl.uid),
+      s' = { ...s, claims: s.claims.set(k, { ...cm, phase: "Bound" }) },
+    }
+  }
+
+  // A user deletes the claim. The finalizer keeps it until release.
+  action deleteClaim(k: str): bool = {
+    val cl = s.clusters.get(CFG.owner.get(k))
+    val cm = s.claims.get(k)
+    all {
+      active(cl),
+      cm.exists,
+      not(cm.deleting),
+      s' = { ...s, claims: s.claims.set(k, { ...cm, deleting: true }) },
+    }
+  }
+
+  // Clear each device that names the deleted claim, with any member UID.
+  action release(k: str, d: str): bool = {
+    val cl = s.clusters.get(CFG.owner.get(k))
+    val cm = s.claims.get(k)
+    all {
+      active(cl),
+      cm.exists,
+      cm.deleting,
+      names(s.devices.get(d).ref, k),
+      s' = writeRef(d, Free),
+    }
+  }
+
+  action removeFinalizer(k: str): bool = {
+    val cl = s.clusters.get(CFG.owner.get(k))
+    val cm = s.claims.get(k)
+    all {
+      active(cl),
+      cm.exists,
+      cm.deleting,
+      CFG.devices.forall(d => not(names(s.devices.get(d).ref, k))),
+      s' = { ...s, claims: s.claims.set(k, { ...cm, exists: false }) },
+    }
+  }
+
+  // ---- Graceful leave, spec 7.6 ----
+
+  action startDrain(c: str): bool = {
+    val cl = s.clusters.get(c)
+    all {
+      active(cl),
+      cl.uid != 0,
+      not(cl.draining),
+      s' = { ...s, clusters: s.clusters.set(c, { ...cl, draining: true }) },
+    }
+  }
+
+  // A draining member releases a device only after its claim is not Bound.
+  action drainRelease(k: str, d: str): bool = {
+    val cl = s.clusters.get(CFG.owner.get(k))
+    val cm = s.claims.get(k)
+    all {
+      active(cl),
+      cl.draining,
+      cm.phase != "Bound",
+      names(s.devices.get(d).ref, k),
+      s' = writeRef(d, Free),
+    }
+  }
+
+  action finishLeave(c: str): bool = {
+    val cl = s.clusters.get(c)
+    val mo = s.members.get(c)
+    val rv = s.memberCounter + 1
+    all {
+      active(cl),
+      cl.draining,
+      cl.uid != 0,
+      CFG.devices.forall(d => not(refMember(s.devices.get(d).ref) == c
+        and refMuid(s.devices.get(d).ref) == cl.uid)),
+      s' = {
+        ...s,
+        members: s.members.set(c, { ...mo, exists: false, rv: rv }),
+        memberCounter: rv,
+        clusters: s.clusters.set(c, { ...cl, left: true, uid: 0 }),
+        someLeft: true,
+      },
+    }
+  }
+
   action step = any {
     tick,
     landSome,
@@ -522,6 +634,14 @@ module solas {
       adopt(k, d),
       releaseDuplicate(k, d),
       clearOrphan(c, d),
+      suspend(k),
+      resume(k),
+      deleteClaim(k),
+      release(k, d),
+      removeFinalizer(k),
+      startDrain(c),
+      drainRelease(k, d),
+      finishLeave(c),
       join(c),
       renewSend(c),
       renewLand(c),
