@@ -5,7 +5,7 @@
     "nodejs": "22",
     "quint": "0.32.0",
     "jdk17": "latest",
-    "kind": "latest",
+    "k3d": "5.9.0",
     "kubectl": "latest",
     "awscli2": "latest",
     "rustup": "latest",
