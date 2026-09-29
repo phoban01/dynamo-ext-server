@@ -1,10 +1,10 @@
-# dynamo-ext-server
+# solas
 
 ## Goal
 
 This project builds an api-extension server that uses dynamodb as a storage backend.
 The aim is to run multiple kubernetes management clusters with no master of masters needed. Global state can be written to Custom reosurces
-that get stored in dynamodb and replicated to all other member clusters. The inented global state is a fleet of devices that can be leased.
+that get stored in dynamodb and replicated to all other member clusters. The inented global state is a pool of devices that can be leased.
 clusters can join and leave the mesh. a device may only be leased to a single claim at a time. 
 
 The following custom resources should prove the pattern:
@@ -69,6 +69,6 @@ filler, no marketing adjectives, no emoji.
 
 - `quint/` models; `scripts/quint-check.sh` positive and negative checks
 - `.duvet/config.toml` and `.duvet/snapshot.txt` traceability gate
-- `cmd/cask-apiserver/` the extension server; `demo/kind/` three-cluster demo
+- `cmd/solas-apiserver/` the extension server; `demo/kind/` three-cluster demo
 - `docs/confidence.md` the trust ladder; `docs/sim-gate.md` the simulator
 - `.github/workflows/verify.yml` and `sim-gate.yml` the CI gates

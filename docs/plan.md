@@ -23,28 +23,30 @@ The core safety rule: a device is bound to at most one claim at a time.
 
 Each member cluster runs two things:
 
-1. `cask-apiserver`, an aggregated API server. It serves the global
+1. `solas-apiserver`, an aggregated API server. It serves the global
    resources (`Device`, `Member`) and stores them in DynamoDB. An
    `APIService` object registers it with the cluster's kube-apiserver.
-2. `cask-controller`, a controller manager. It runs the claim controller,
+2. `solas-controller`, a controller manager. It runs the claim controller,
    the membership heartbeat, and the reclaim sweeper.
 
 All clusters point at the same DynamoDB table. The demo uses one LocalStack
 container for this table.
 
 ```
- cluster A                    cluster B                    cluster C
- kube-apiserver               kube-apiserver               kube-apiserver
-   | APIService                 | APIService                 | APIService
- cask-apiserver --+        cask-apiserver --+        cask-apiserver --+
- cask-controller  |        cask-controller  |        cask-controller  |
-                  |                         |                         |
-                  +-------------> DynamoDB table "cask" <-------------+
+ cluster A                     cluster B                     cluster C
+ kube-apiserver                kube-apiserver                kube-apiserver
+   | APIService                  | APIService                  | APIService
+ solas-apiserver --+           solas-apiserver --+           solas-apiserver --+
+ solas-controller  |           solas-controller  |           solas-controller  |
+                   |                             |                             |
+                   +-----------------------------+-----------------------------+
+                                                 |
+                                      DynamoDB table "solas"
 ```
 
 ### Resources
 
-API group `fleet.cask.dev`, version `v1alpha1`.
+API group `solas.dev`, version `v1alpha1`.
 
 | Kind          | Scope      | Store      | Purpose                              |
 |---------------|------------|------------|--------------------------------------|
@@ -109,14 +111,14 @@ store.
 6. When the claim is deleted, a finalizer clears `claimRef`. The clear is
    conditional on `claimRef` still naming this claim.
 
-The `Device` status strategy in `cask-apiserver` also rejects any update
+The `Device` status strategy in `solas-apiserver` also rejects any update
 that changes `claimRef` from one holder to another holder. A holder must
 release before a new holder binds. The conditional write and this check
 together enforce the safety rule.
 
 ### Membership, join, and leave
 
-- Join: a cluster installs `cask-apiserver` and `cask-controller` with a
+- Join: a cluster installs `solas-apiserver` and `solas-controller` with a
   cluster ID and table credentials. The controller creates its `Member`
   object. The object gets a new UID on each join.
 - Heartbeat: the controller renews `Member.status.renewTime` on a fixed
@@ -150,7 +152,7 @@ These become ADRs in `docs/adr/`. After approval, they go into the
 3. Resource versions come from one counter item per resource.
 4. Watch reads a TTL event log by polling.
 5. The member UID is the fencing token for reclaim.
-6. The API group is `fleet.cask.dev/v1alpha1`.
+6. The API group is `solas.dev/v1alpha1`.
 
 ## Safety and liveness properties
 
@@ -192,18 +194,18 @@ Exit: `devbox run verify` passes locally and in CI.
 
 ### M1: Specification
 
-- `spec/cask.md` with numbered sections: storage, resource versions, watch,
+- `spec/solas.md` with numbered sections: storage, resource versions, watch,
   device, claim, membership, and reclaim. Requirements use MUST and
   SHOULD, one per sentence.
 - The ADRs from "Decisions to confirm".
-- The Duvet config points at `spec/cask.md`. The snapshot lists every
+- The Duvet config points at `spec/solas.md`. The snapshot lists every
   requirement as not yet cited.
 
 Exit: `devbox run duvet-report` lists every requirement.
 
 ### M2: Quint model
 
-- `quint/cask.qnt` models members, devices, claims, the store as a
+- `quint/solas.qnt` models members, devices, claims, the store as a
   linearizable map with conditional writes, lease clocks, crash, join,
   and leave.
 - Invariants for each safety property.
@@ -232,7 +234,7 @@ Exit: `devbox run test` passes with the race detector.
 
 - API types for `Device` and `Member`, with generated deepcopy, clients,
   informers, and OpenAPI.
-- `cmd/cask-apiserver` built on `k8s.io/apiserver`, with the DynamoDB
+- `cmd/solas-apiserver` built on `k8s.io/apiserver`, with the DynamoDB
   storage from M3.
 - A `Device` status strategy that rejects a direct holder-to-holder
   change of `claimRef`.
@@ -245,7 +247,7 @@ Exit: unit tests for the strategies pass. A single kind cluster serves
 ### M5: Controllers
 
 - The `DeviceClaim` CRD.
-- `cmd/cask-controller` with the claim controller, the member heartbeat,
+- `cmd/solas-controller` with the claim controller, the member heartbeat,
   the graceful leave path, and the reclaim sweeper.
 - Unit tests against a fake store.
 
@@ -281,7 +283,7 @@ Exit: `devbox run e2e` passes.
 ### M8: Model-based tests
 
 - A Quint run exports ITF traces.
-- A Go driver replays each trace against a real `cask-apiserver` and the
+- A Go driver replays each trace against a real `solas-apiserver` and the
   controllers. It checks that the observed state matches the trace state
   after each step.
 
