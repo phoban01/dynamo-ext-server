@@ -59,6 +59,19 @@ Claude Code session, so heavy jobs must not overlap.
 
 ## Architecture decisions already made
 
+- One DynamoDB table in one region is the shared store
+  ([docs/adr/0001-single-table.md](docs/adr/0001-single-table.md)).
+- `DeviceClaim` is a CRD in local etcd. `Device` and `Member` live in
+  DynamoDB ([docs/adr/0002-claims-in-local-etcd.md](docs/adr/0002-claims-in-local-etcd.md)).
+- Resource versions come from one counter item per resource
+  ([docs/adr/0003-rv-counter.md](docs/adr/0003-rv-counter.md)).
+- Watch polls a TTL event log
+  ([docs/adr/0004-watch-by-polling.md](docs/adr/0004-watch-by-polling.md)).
+- The member UID is the fencing token for reclaim
+  ([docs/adr/0005-member-uid-fencing.md](docs/adr/0005-member-uid-fencing.md)).
+- The API group is `solas.dev/v1alpha1`
+  ([docs/adr/0006-api-group.md](docs/adr/0006-api-group.md)).
+
 ## Writing
 
 Specs, issues, commit messages, and docs follow Simplified Technical
