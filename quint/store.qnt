@@ -5,7 +5,9 @@ module store {
   type Watcher = {
     // The version of the last delivered event. The watch starts at 0.
     last: int,
-    delivered: List[int],
+    delivered: Set[int],
+    // False once a delivery holds a version not above an earlier one.
+    ordered: bool,
     gone: bool,
     // 0: idle. 1: read the counter, value c.
     phase: int,
@@ -24,7 +26,7 @@ module store {
   action init = all {
     counter' = 0,
     log' = Set(),
-    w' = { last: 0, delivered: List(), gone: false, phase: 0, c: 0 },
+    w' = { last: 0, delivered: Set(), ordered: true, gone: false, phase: 0, c: 0 },
   }
 
   // A write increments the counter and adds its event in one
@@ -58,9 +60,9 @@ module store {
 
   // Then it queries the versions from last + 1 to c.
   action pollQuery = {
-    val want = range(w.last + 1, w.c + 1)
-    val found = want.select(v => log.contains(v))
-    val complete = found.length() == want.length()
+    val want = 1.to(MAXW).filter(v => v > w.last and v <= w.c)
+    val found = want.intersect(log)
+    val complete = want.subseteq(log)
     all {
       not(w.gone),
       w.phase == 1,
@@ -71,7 +73,8 @@ module store {
           ...w,
           phase: 0,
           last: w.c,
-          delivered: w.delivered.concat(found),
+          delivered: w.delivered.union(found),
+          ordered: w.ordered and found.forall(v => w.delivered.forall(u => u < v)),
         }
       else
         w' = { ...w, phase: 0, gone: true },
@@ -81,18 +84,17 @@ module store {
   action step = any { write, expire, pollRead, pollQuery }
 
   // Delivered versions strictly increase, spec 3.2 and 4.2.
-  val monotonicRV = range(1, w.delivered.length()).foldl(true, (ok, i) =>
-    ok and w.delivered[i - 1] < w.delivered[i]
-  )
+  val monotonicRV = w.ordered
 
   // A watch delivers every version up to last, or it ends with 410 Gone,
   // spec 4.2 and 4.3.
-  val watchComplete = w.gone or w.delivered == range(1, w.last + 1)
+  val watchComplete = w.gone
+    or 1.to(MAXW).forall(v => (v <= w.last) == w.delivered.contains(v))
 
   val storeSafety = monotonicRV and watchComplete
 
   // Witnesses: a watch delivers events, and a watch ends with 410 Gone.
-  val witnessDelivered = w.delivered.length() < 2
+  val witnessDelivered = w.delivered.size() < 2
   val witnessGone = not(w.gone)
 }
 
