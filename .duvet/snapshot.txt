@@ -226,18 +226,18 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation,test]: When the controller finds that its member UID changed, it MUST set each
     TEXT[!MUST,implementation,test]: claim with the old `status.memberUID` to `Lost`.
     TEXT[!MUST,implementation]: A `Lost` claim MUST NOT bind again.
-    TEXT[!MUST]: Workloads MUST use a device only while its claim is in effect.
+    TEXT[!MUST,implementation]: Workloads MUST use a device only while its claim is in effect.
 
   SECTION: [6.6. Device use](#6-6-device-use)
-    TEXT[!MUST]: A workload MUST present the fencing token of its claim each time it uses
-    TEXT[!MUST]: the device.
-    TEXT[!MUST]: The device MUST remember the highest token that it has accepted.
-    TEXT[!MUST]: The device MUST reject a use with a token lower than the highest token
-    TEXT[!MUST]: that it has accepted.
-    TEXT[!MUST]: The device MUST accept a use with a token equal to or higher than the
-    TEXT[!MUST]: highest token that it has accepted, and record that token as the highest.
-    TEXT[!MUST]: A device that cannot check tokens MUST sit behind a gatekeeper that
-    TEXT[!MUST]: checks them.
+    TEXT[!MUST,implementation]: A workload MUST present the fencing token of its claim each time it uses
+    TEXT[!MUST,implementation]: the device.
+    TEXT[!MUST,implementation]: The device MUST remember the highest token that it has accepted.
+    TEXT[!MUST,implementation,test]: The device MUST reject a use with a token lower than the highest token
+    TEXT[!MUST,implementation,test]: that it has accepted.
+    TEXT[!MUST,implementation,test]: The device MUST accept a use with a token equal to or higher than the
+    TEXT[!MUST,implementation,test]: highest token that it has accepted, and record that token as the highest.
+    TEXT[!MUST,implementation]: A device that cannot check tokens MUST sit behind a gatekeeper that
+    TEXT[!MUST,implementation]: checks them.
 
   SECTION: [7.1. Resource](#7-1-resource)
     TEXT[!MUST,implementation]: `Member` MUST be a cluster-scoped resource in the group `solas.dev`,
