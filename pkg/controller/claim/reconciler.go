@@ -58,6 +58,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 	st := r.Member.Status()
 
+	//= spec/solas.md#6-3-bind
+	//# The controller MUST NOT bind a claim that has a deletion timestamp.
+
+	//= spec/solas.md#6-4-release
+	//# When a claim has a deletion timestamp, the controller MUST release its
+	//# device.
 	if !claim.DeletionTimestamp.IsZero() {
 		return r.release(ctx, &claim)
 	}
@@ -94,6 +100,9 @@ func (r *Reconciler) bind(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 
 	//= spec/solas.md#6-2-controller
 	//# The controller MUST NOT bind while its member is draining.
+
+	//= spec/solas.md#7-6-leave
+	//# A draining member MUST NOT bind.
 	if st.UID == "" || !st.Live || st.Draining {
 		return reconcile.Result{RequeueAfter: r.Resync}, nil
 	}
@@ -150,6 +159,10 @@ func (r *Reconciler) bind(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 
 	//= spec/solas.md#6-3-bind
 	//# The `claimRef` MUST hold the UID of the member's current `Member`.
+
+	//= spec/solas.md#7-2-join
+	//# The member MUST use the UID of its current `Member` in each `claimRef`
+	//# that it writes.
 	d.Status.ClaimRef = &solasv1alpha1.ClaimRef{
 		Member:    r.ClusterID,
 		MemberUID: st.UID,
@@ -168,6 +181,11 @@ func (r *Reconciler) bind(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 		return reconcile.Result{}, err
 	}
 	log.FromContext(ctx).Info("bound", "device", d.Name, "token", d.Status.FencingToken)
+	//= spec/solas.md#6-3-bind
+	//# The controller MUST NOT set a claim to `Bound` from a bind that carried
+	//# an older member UID.
+	//
+	// The bind above carried st.UID, and setBound records the same UID.
 	return r.setBound(ctx, claim, d, st.UID)
 }
 
@@ -188,7 +206,11 @@ func (r *Reconciler) setBound(ctx context.Context, claim *claimsv1alpha1.DeviceC
 	return reconcile.Result{RequeueAfter: r.Resync}, ignoreConflict(r.Client.Status().Update(ctx, claim))
 }
 
-// held handles a Bound or Suspended claim.
+//= spec/solas.md#6-3-bind
+//# The controller MUST NOT move a claim to another device while the claim
+//# is `Bound`, because a workload can be using the device.
+
+// held handles a Bound or Suspended claim. It never binds a new device.
 func (r *Reconciler) held(ctx context.Context, claim *claimsv1alpha1.DeviceClaim, st member.Status) (reconcile.Result, error) {
 	if st.UID != "" && claim.Status.MemberUID != st.UID {
 		//= spec/solas.md#6-5-phases

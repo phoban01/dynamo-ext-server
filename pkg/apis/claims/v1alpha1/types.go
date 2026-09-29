@@ -5,6 +5,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+//= spec/solas.md#6-1-resource
+//# `DeviceClaim.status.phase` MUST be one of `Pending`, `Bound`,
+//# `Suspended`, or `Lost`.
+
 // ClaimPhase is the phase of a claim, spec 6.5.
 type ClaimPhase string
 
@@ -21,6 +25,13 @@ const ReleaseFinalizer = "solas.dev/release"
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+//= spec/solas.md#6-1-resource
+//# `DeviceClaim` MUST be a namespaced CRD in the group `claims.solas.dev`,
+//# version `v1alpha1`.
+
+//= spec/solas.md#6-1-resource
+//# Each member cluster MUST store its claims in its own etcd.
+
 // DeviceClaim asks for one device. It lives in the etcd of its cluster.
 type DeviceClaim struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -32,6 +43,10 @@ type DeviceClaim struct {
 
 // DeviceClaimSpec says which devices the claim accepts.
 type DeviceClaimSpec struct {
+	//= spec/solas.md#6-1-resource
+	//# `DeviceClaim.spec.selector` MUST be a label selector over `Device`
+	//# labels.
+
 	// Selector matches Device labels. An empty selector matches every
 	// device.
 	// +optional

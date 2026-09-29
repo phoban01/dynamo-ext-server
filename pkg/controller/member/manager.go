@@ -179,6 +179,10 @@ func (m *Manager) renew(ctx context.Context) error {
 		m.mu.Unlock()
 		return nil
 	case apierrors.IsConflict(err):
+		//= spec/solas.md#7-6-leave
+		//# To leave, the member MUST first set its phase to `Draining`.
+		//
+		// An operator sets the phase; the member reads it here.
 		// Another client changed the Member, for example to start a leave.
 		// Read it again; the lease does not move.
 		var cur solasv1alpha1.Member
@@ -238,6 +242,10 @@ func (m *Manager) set(mem *solasv1alpha1.Member, send time.Time) {
 	//# Let `S` be the local time at which the member sent its last successful
 	//# renew.
 	m.sentAt = send
+
+	//= spec/solas.md#7-4-lease-on-the-holder
+	//# The member MUST treat itself as live again only after a later renew
+	//# succeeds.
 	m.draining = mem.Status.Phase == solasv1alpha1.MemberDraining
 }
 
