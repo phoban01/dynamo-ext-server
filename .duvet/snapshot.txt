@@ -155,8 +155,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: the delete condition on `rv` from section 2.3.
 
   SECTION: [6.1. Resource](#6-1-resource)
-    TEXT[!MUST]: `DeviceClaim` MUST be a namespaced CRD in the group `solas.dev`, version
-    TEXT[!MUST]: `v1alpha1`.
+    TEXT[!MUST]: `DeviceClaim` MUST be a namespaced CRD in the group `claims.solas.dev`,
+    TEXT[!MUST]: version `v1alpha1`.
     TEXT[!MUST]: Each member cluster MUST store its claims in its own etcd.
     TEXT[!MUST]: `DeviceClaim.spec.selector` MUST be a label selector over `Device`
     TEXT[!MUST]: labels.
