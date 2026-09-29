@@ -280,6 +280,13 @@ func (w *watcher) poll(last uint64) (uint64, bool) {
 		}
 		return 0, false
 	}
+	//= spec/solas.md#4-1-event-log
+	//# The server MUST NOT depend on the time at which DynamoDB deletes an
+	//# expired item.
+
+	//= spec/solas.md#4-2-poll
+	//# A watch from version `r` MUST deliver every event with a version greater
+	//# than `r`.
 	if !complete(events, last+1, c) {
 		//= spec/solas.md#4-3-gaps
 		//# If the query result does not hold each version from `last + 1` to `c`

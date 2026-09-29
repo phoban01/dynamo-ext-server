@@ -24,6 +24,11 @@ func createPods(t *testing.T, s *store, names ...string) {
 	}
 }
 
+//= spec/solas.md#2-4-reads
+//= type=test
+//# A request for a list at an older, exact resource version MUST be served
+//# by the watch cache, or it MUST fail with `410 Gone`.
+
 func TestListContinueAfterWriteIsGone(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
@@ -101,6 +106,10 @@ func (w *writeDuringQuery) Query(ctx context.Context, in *dynamodb.QueryInput, o
 	}
 	return out, err
 }
+
+//= spec/solas.md#2-4-reads
+//= type=test
+//# If the two counter values differ, the list MUST retry.
 
 func TestListRetriesWhenAWriteLandsDuringTheQuery(t *testing.T) {
 	ctx := context.Background()

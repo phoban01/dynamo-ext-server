@@ -244,6 +244,9 @@ func (s *store) Delete(ctx context.Context, key string, out runtime.Object, prec
 		}
 
 		rv, err := s.commit(ctx, write{sk: sk, action: actDelete, expectRV: orig.rev, value: orig.data, prev: orig.data})
+		//= spec/solas.md#2-3-writes
+		//# If the transaction fails on the object condition of an update or a
+		//# delete, the server MUST read the object again and retry.
 		if errors.Is(err, errObjectConflict) {
 			// The object changed or went away. Read it again and retry.
 			if orig, err = current(); err != nil {
@@ -337,6 +340,10 @@ func (s *store) GuaranteedUpdate(ctx context.Context, key string, destination ru
 		}
 		rv, err := s.commit(ctx, w)
 		if errors.Is(err, errObjectConflict) {
+			//= spec/solas.md#2-3-writes
+			//# If the transaction fails on the object condition of an update or a
+			//# delete, the server MUST read the object again and retry.
+			//
 			// GuaranteedUpdate is the generic registry's retry loop, so it
 			// reads the new state and calls tryUpdate again.
 			if orig, err = current(); err != nil {

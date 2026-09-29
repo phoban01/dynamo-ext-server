@@ -28,8 +28,14 @@ type API interface {
 
 // Default settings.
 const (
-	DefaultTable            = "solas"
-	DefaultEventRetention   = time.Hour
+	DefaultTable          = "solas"
+	DefaultEventRetention = time.Hour
+	//= spec/solas.md#4-2-poll
+	//# The server SHOULD poll each resource at least once each second.
+
+	//= spec/solas.md#4-2-poll
+	//# The server SHOULD NOT poll a resource more often than every 100
+	//# milliseconds.
 	DefaultPollInterval     = 200 * time.Millisecond
 	DefaultProgressInterval = time.Minute
 )
@@ -92,13 +98,15 @@ func newStore(cfg Config, codec runtime.Codec, newFunc, newListFunc func() runti
 		pollInterval:     cfg.PollInterval,
 		progressInterval: cfg.ProgressInterval,
 		codec:            codec,
-		versioner:        storage.APIObjectVersioner{},
-		newFunc:          newFunc,
-		newListFunc:      newListFunc,
-		resourcePrefix:   resourcePrefix,
-		resource:         joinPrefix(prefix, strings.TrimSuffix(resourcePrefix, "/")),
-		groupResource:    groupResource,
-		now:              time.Now,
+		//= spec/solas.md#3-3-objects
+		//# The server MUST encode each resource version as a decimal string.
+		versioner:      storage.APIObjectVersioner{},
+		newFunc:        newFunc,
+		newListFunc:    newListFunc,
+		resourcePrefix: resourcePrefix,
+		resource:       joinPrefix(prefix, strings.TrimSuffix(resourcePrefix, "/")),
+		groupResource:  groupResource,
+		now:            time.Now,
 	}
 	if s.table == "" {
 		s.table = DefaultTable

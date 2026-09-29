@@ -55,6 +55,13 @@ func (s *store) commit(ctx context.Context, w write) (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
+		//= spec/solas.md#3-1-issue
+		//# Each write MUST get a resource version exactly one more than the
+		//# previous write to the same resource.
+
+		//= spec/solas.md#3-2-order
+		//# The resource version of a resource MUST strictly increase in commit
+		//# order.
 		next := n + 1
 		_, err = s.client.TransactWriteItems(ctx, s.transaction(w, n, next))
 		if err == nil {
@@ -75,6 +82,9 @@ func (s *store) commit(ctx context.Context, w write) (uint64, error) {
 			}
 			continue
 		}
+		//= spec/solas.md#2-3-writes
+		//# The server MUST reject a write whose event item would exceed the
+		//# DynamoDB item size limit.
 		if isItemTooLarge(err) {
 			//= spec/solas.md#2-3-writes
 			//# The server MUST return `413 RequestEntityTooLarge` for such a write.
@@ -175,6 +185,8 @@ func (s *store) objectAction(w write, next uint64) types.TransactWriteItem {
 }
 
 func (s *store) eventAction(w write, next uint64) types.TransactWriteItem {
+	//= spec/solas.md#2-2-items
+	//# The event type MUST be one of `INIT`, `ADDED`, `MODIFIED`, or `DELETED`.
 	eventType := map[action]watch.EventType{
 		actCreate: watch.Added,
 		actUpdate: watch.Modified,
@@ -255,7 +267,10 @@ func (s *store) initCounter(ctx context.Context) error {
 		ClientRequestToken: aws.String(newToken()),
 		TransactItems: []types.TransactWriteItem{
 			{Put: &types.Put{
-				TableName:           aws.String(s.table),
+				TableName: aws.String(s.table),
+				//= spec/solas.md#2-2-items
+				//# A counter item MUST hold the last issued resource version in the number
+				//# attribute `n`.
 				Item:                map[string]types.AttributeValue{attrPK: str(pk), attrSK: str(sk), attrN: num(1)},
 				ConditionExpression: aws.String("attribute_not_exists(pk)"),
 			}},

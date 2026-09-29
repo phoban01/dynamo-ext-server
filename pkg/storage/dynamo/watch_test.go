@@ -42,6 +42,16 @@ func deleteEvent(t *testing.T, s *store, rv uint64) {
 	}
 }
 
+//= spec/solas.md#4-3-gaps
+//= type=test
+//# If the query result does not hold each version from `last + 1` to `c`
+//# exactly once, the watch MUST end with `410 Gone`.
+
+//= spec/solas.md#4-1-event-log
+//= type=test
+//# The server MUST NOT depend on the time at which DynamoDB deletes an
+//# expired item.
+
 func TestWatchGapEndsWithGone(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
@@ -78,6 +88,10 @@ func TestWatchGapEndsWithGone(t *testing.T) {
 		t.Error("watch still open after 410 Gone")
 	}
 }
+
+//= spec/solas.md#4-2-poll
+//= type=test
+//# A watch MUST NOT deliver an `INIT` event.
 
 func TestWatchSkipsInitEvent(t *testing.T) {
 	ctx := context.Background()

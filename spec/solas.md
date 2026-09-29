@@ -105,9 +105,11 @@ The server SHOULD wait a short random time before each such retry.
 If the transaction fails on the object condition of a create, the server
 MUST return `409 AlreadyExists`.
 If the transaction fails on the object condition of an update or a
-delete, the server MUST return `409 Conflict`.
-The Kubernetes generic registry then retries an update on the new state
-where the request allows it.
+delete, the server MUST read the object again and retry.
+The retry runs the preconditions and the update function again, on the
+new state.
+When a request carries a resource version that no longer matches, the
+Kubernetes generic registry returns `409 Conflict`.
 
 The server MUST reject a write whose event item would exceed the
 DynamoDB item size limit.

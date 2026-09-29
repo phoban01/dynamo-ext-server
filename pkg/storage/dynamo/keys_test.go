@@ -13,6 +13,11 @@ func testKeyStore(t *testing.T, prefix, resourcePrefix string) *store {
 	return s
 }
 
+//= spec/solas.md#2-2-items
+//= type=test
+//# An object item MUST have `sk` equal to the part of its storage key after
+//# the resource name.
+
 func TestKeysSortKey(t *testing.T) {
 	for _, resourcePrefix := range []string{"/pods", "/pods/"} {
 		s := testKeyStore(t, "/registry", resourcePrefix)
@@ -68,6 +73,11 @@ func TestKeysPartitions(t *testing.T) {
 		t.Errorf("resource with prefix / = %q, want /pods", s.resource)
 	}
 }
+
+//= spec/solas.md#2-2-items
+//= type=test
+//# An event item MUST have `sk` equal to its resource version as a decimal
+//# string, padded with zeros to 20 digits.
 
 func TestKeysEventSortKeyOrder(t *testing.T) {
 	if got := eventSK(42); got != "00000000000000000042" {

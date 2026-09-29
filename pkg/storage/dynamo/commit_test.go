@@ -43,6 +43,10 @@ func eventVersions(t *testing.T, s *store) []uint64 {
 	}
 }
 
+//= spec/solas.md#3-1-issue
+//= type=test
+//# The first write to a resource MUST get resource version 2.
+
 func TestCommitSequence(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
@@ -63,6 +67,16 @@ func TestCommitSequence(t *testing.T) {
 		t.Errorf("event log = %v, want [1 2 3 4] (1 is INIT)", got)
 	}
 }
+
+//= spec/solas.md#2-3-writes
+//= type=test
+//# For an update, the object action MUST be a put on condition that `rv`
+//# equals the version that the server read.
+
+//= spec/solas.md#2-3-writes
+//= type=test
+//# For a delete, the object action MUST be a delete on condition that `rv`
+//# equals the version that the server read.
 
 func TestCommitObjectConflict(t *testing.T) {
 	ctx := context.Background()
@@ -89,6 +103,15 @@ func TestCommitObjectConflict(t *testing.T) {
 		t.Errorf("counter = %d, %v; want 2, nil after failed writes", n, err)
 	}
 }
+
+//= spec/solas.md#3-1-issue
+//= type=test
+//# Each write MUST get a resource version exactly one more than the
+//# previous write to the same resource.
+
+//= spec/solas.md#4-1-event-log
+//= type=test
+//# Each write MUST add one event item to the event log of its resource.
 
 func TestCommitConcurrentWritersHaveNoGaps(t *testing.T) {
 	ctx := context.Background()

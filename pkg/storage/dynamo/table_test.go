@@ -11,6 +11,15 @@ import (
 	"github.com/phoban01/solas/internal/ddbtest"
 )
 
+//= spec/solas.md#2-1-table
+//= type=test
+//# The table MUST have a string partition key named `pk` and a string sort
+//# key named `sk`.
+
+//= spec/solas.md#2-1-table
+//= type=test
+//# The table MUST enable TTL on the attribute `expires`.
+
 func TestEnsureTable(t *testing.T) {
 	ctx := context.Background()
 	c := ddbtest.Client(t)

@@ -21,6 +21,9 @@ func (s *store) eventPK() string {
 	return "ev#" + s.resource
 }
 
+//= spec/solas.md#3-1-issue
+//# Each resource MUST have its own counter item.
+
 // counterKey returns the key of the counter item of this resource.
 func (s *store) counterKey() (pk, sk string) {
 	//= spec/solas.md#2-2-items
