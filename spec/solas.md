@@ -339,4 +339,131 @@ Workloads SHOULD use a device only while its claim is `Bound`.
 
 ## 7. Membership
 
+### 7.1. Resource
+
+`Member` MUST be a cluster-scoped resource in the group `solas.dev`,
+version `v1alpha1`.
+The solas API server MUST serve `Member` from the table.
+The name of a `Member` MUST be the cluster ID of its member cluster.
+`Member.spec.leaseDurationSeconds` MUST hold the lease duration `D`.
+`Member.status.renewTime` holds the time of the last renew, as the
+holder's clock gives it.
+`Member.status.phase` MUST be `Active` or `Draining`.
+A member is live while its `Member` exists.
+
+### 7.2. Join
+
+A member cluster MUST create its `Member` before it binds any device.
+The server gives each new `Member` a new UID.
+The member MUST use the UID of its current `Member` in each `claimRef`
+that it writes.
+
+When the controller starts, it MUST try to renew its existing `Member`.
+If the renew succeeds, the controller MUST keep the UID of that `Member`.
+If the `Member` does not exist, the controller MUST create a new one.
+If the new UID differs from the UID in a claim's `status.memberUID`, the
+claim is `Lost`, as section 6.5 describes.
+
+### 7.3. Renew
+
+A renew MUST be an update of `Member.status.renewTime`.
+The renew MUST carry the resource version that the member last read or
+wrote.
+A renew that fails with `404 NotFound` means that a sweeper deleted the
+`Member`.
+After a `404 NotFound`, the member MUST join again as section 7.2
+describes.
+A member SHOULD renew every `D / 3`.
+The default `D` is 30 seconds.
+
+### 7.4. Lease on the holder
+
+Let `S` be the local time at which the member sent its last successful
+renew.
+Let `M` be the safety margin.
+The member MUST treat itself as not live from local time `S + D - M`.
+The member MUST treat itself as live again only after a later renew
+succeeds.
+
+### 7.5. Clock drift
+
+Let `rho` be the bound on the rate drift between any two clocks.
+The design assumes that `rho` is at most 0.01.
+The margin `M` MUST be at least `2 * rho * D`.
+The default `M` is `D / 10`.
+The default leaves room for scheduling delays on top of drift.
+Solas does not depend on synchronized clocks.
+Solas depends only on the drift bound.
+
+### 7.6. Leave
+
+To leave, the member MUST first set its phase to `Draining`.
+A draining member MUST NOT bind.
+The member MUST then release each device that it holds, as section 6.4
+describes.
+The member MUST then delete its `Member`.
+
 ## 8. Reclaim
+
+### 8.1. Expiry on the observer
+
+Each member cluster MUST run a sweeper.
+An observer MUST measure the lease of another member with its own clock.
+The observer MUST record the local time at which it first saw the
+current resource version of each `Member`.
+Let `T` be that local time.
+The observer MUST treat the `Member` as expired from local time `T + D`.
+The observer MUST NOT compare `renewTime` with its own clock.
+`renewTime` comes from another clock, and the two clocks can disagree by
+any amount.
+
+### 8.2. Delete an expired member
+
+The sweeper MUST delete an expired `Member` with the resource version
+that it observed.
+If the member renewed after the observation, the delete fails with
+`409 Conflict`.
+So a renew and a delete of the same `Member` cannot both succeed.
+The sweeper MUST NOT delete its own `Member`.
+
+### 8.3. Clear stale claim references
+
+The sweeper MUST do a consistent list of devices first.
+The sweeper MUST then do a consistent list of members.
+The order matters.
+A member creates its `Member` before it writes any `claimRef`.
+So a `claimRef` in the device list names a member that existed before
+the member list.
+If that member is not in the member list, it is gone.
+
+For each device whose `claimRef` names a member UID that is not in the
+member list, the sweeper MUST clear `claimRef`.
+The clear MUST be a status update with the resource version from the
+device list.
+If the clear fails with `409 Conflict`, the sweeper MUST skip the device
+until its next run.
+The sweeper MUST run at least once every `D`.
+
+### 8.4. Safety
+
+The rules in sections 7.4, 7.5, 8.1, and 8.2 give this result.
+A sweeper deletes a `Member` only after the holder treats itself as not
+live.
+The observer sees a renew at or after the time the holder sent it.
+The observer waits `D` on its own clock from then.
+The holder waits at most `D - M` on its own clock.
+With `M` at least `2 * rho * D`, the holder stops first.
+
+The Quint model checks these properties:
+
+- No two claims are bound to the same device.
+- If a claim is `Bound` to a device, the device's `claimRef` names the
+  claim, or the claim's member is not live.
+- A sweeper does not clear a `claimRef` while the holder is live by its
+  own clock.
+- The resource version of each resource strictly increases.
+- A watch from `r` sees every event after `r` in order, or it gets
+  `410 Gone`.
+- A device whose member leaves or crashes becomes free.
+- A claim for a free, matching device becomes `Bound` while its member
+  is live.
