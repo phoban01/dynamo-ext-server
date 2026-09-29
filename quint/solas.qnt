@@ -291,15 +291,132 @@ module solas {
     }
   }
 
+  // ---- Sweeper, spec 8 ----
+
+  // The observer records the local time at which it first saw the current
+  // version of another Member, spec 8.1.
+  action observe(c: str, m: str): bool = {
+    val cl = s.clusters.get(c)
+    val mo = s.members.get(m)
+    val now = if (mo.exists) { rv: mo.rv, at: cl.clock } else NOSEEN
+    all {
+      active(cl),
+      m != c,
+      cl.seen.get(m).rv != now.rv,
+      s' = {
+        ...s,
+        clusters: s.clusters.set(c, { ...cl, seen: cl.seen.set(m, now) }),
+      },
+    }
+  }
+
+  // Delete an expired Member with the observed rv, spec 8.2.
+  action sweepDelete(c: str, m: str): bool = {
+    val cl = s.clusters.get(c)
+    val seen = cl.seen.get(m)
+    val mo = s.members.get(m)
+    val rv = s.memberCounter + 1
+    all {
+      active(cl),
+      m != c,
+      seen.rv >= 0,
+      cl.clock >= seen.at + CFG.D,
+      mo.exists,
+      mo.rv == seen.rv,
+      s' = {
+        ...s,
+        members: s.members.set(m, { exists: false, uid: mo.uid, rv: rv }),
+        memberCounter: rv,
+      },
+    }
+  }
+
+  pure def liveUids(members: str -> MemberObj): Set[int] =
+    members.keys().filter(m => members.get(m).exists).map(m => members.get(m).uid)
+
+  // The sweeper lists devices, then members, spec 8.3. The membersFirst
+  // flag swaps the order.
+  action sweepListDevices(c: str): bool = {
+    val cl = s.clusters.get(c)
+    val from = if (CFG.membersFirst) 1 else 0
+    all {
+      active(cl),
+      cl.sweepPhase == from,
+      s' = {
+        ...s,
+        clusters: s.clusters.set(c, {
+          ...cl,
+          sweepPhase: cl.sweepPhase + 1,
+          sweepDevs: s.devices,
+        }),
+      },
+    }
+  }
+
+  action sweepListMembers(c: str): bool = {
+    val cl = s.clusters.get(c)
+    val from = if (CFG.membersFirst) 0 else 1
+    all {
+      active(cl),
+      cl.sweepPhase == from,
+      s' = {
+        ...s,
+        clusters: s.clusters.set(c, {
+          ...cl,
+          sweepPhase: cl.sweepPhase + 1,
+          sweepUids: liveUids(s.members),
+        }),
+      },
+    }
+  }
+
+  // Clear a claimRef whose member UID is not in the member list. The clear
+  // carries the rv from the device list.
+  action sweepClear(c: str, d: str): bool = {
+    val cl = s.clusters.get(c)
+    val listed = cl.sweepDevs.get(d)
+    val rv = s.devCounter + 1
+    all {
+      active(cl),
+      cl.sweepPhase == 2,
+      not(isFree(listed.ref)),
+      not(cl.sweepUids.contains(refMuid(listed.ref))),
+      s.devices.get(d).rv == listed.rv,
+      s' = {
+        ...s,
+        devices: s.devices.set(d, { rv: rv, ref: Free }),
+        devCounter: rv,
+        cleared: true,
+      },
+    }
+  }
+
+  action sweepDone(c: str): bool = {
+    val cl = s.clusters.get(c)
+    all {
+      active(cl),
+      cl.sweepPhase == 2,
+      s' = { ...s, clusters: s.clusters.set(c, { ...cl, sweepPhase: 0 }) },
+    }
+  }
+
   action step = any {
     tick,
     nondet c = CFG.clusters.oneOf()
+    nondet m = CFG.clusters.oneOf()
+    nondet d = CFG.devices.oneOf()
     any {
       join(c),
       renewSend(c),
       renewLand(c),
       crash(c),
       recover(c),
+      observe(c, m),
+      sweepDelete(c, m),
+      sweepListDevices(c),
+      sweepListMembers(c),
+      sweepClear(c, d),
+      sweepDone(c),
     },
   }
 }
