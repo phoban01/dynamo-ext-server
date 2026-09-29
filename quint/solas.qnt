@@ -118,16 +118,18 @@ module solas {
 
   // Real time moves by one tick. Each clock moves by one tick plus or
   // minus the drift, so the rate drift bound rho is drift / tick.
+  action tickBy(adv: str -> int): bool = s' = {
+    ...s,
+    now: s.now + CFG.tick,
+    clusters: s.clusters.keys().mapBy(c => {
+      ...s.clusters.get(c),
+      clock: s.clusters.get(c).clock + CFG.tick + adv.get(c),
+    }),
+  }
+
   action tick = {
     nondet adv = setOfMaps(CFG.clusters, Set(-CFG.drift, 0, CFG.drift)).oneOf()
-    s' = {
-      ...s,
-      now: s.now + CFG.tick,
-      clusters: s.clusters.keys().mapBy(c => {
-        ...s.clusters.get(c),
-        clock: s.clusters.get(c).clock + CFG.tick + adv.get(c),
-      }),
-    }
+    tickBy(adv)
   }
 
   // ---- Helpers ----
@@ -664,13 +666,13 @@ module solas {
   val witnessLeft = not(s.someLeft)
 
   action step = any {
-    tick,
-    landSome,
     nondet c = CFG.clusters.oneOf()
     nondet m = CFG.clusters.oneOf()
     nondet d = CFG.devices.oneOf()
     nondet k = CFG.claims.oneOf()
     any {
+      tick,
+      landSome,
       bindSend(k, d),
       adopt(k, d),
       releaseDuplicate(k, d),
@@ -715,4 +717,54 @@ module solas2 {
     membersFirst: false,
     adoptAnyUid: false,
   }).*
+
+  pure val fastB = Map("a" -> 0, "b" -> 1)
+
+  // a binds d1 for a1. The claim is in effect.
+  run bindTest =
+    init
+      .then(join("a"))
+      .then(bindSend("a1", "d1"))
+      .then(bindLand({ cluster: "a", claim: "a1", dev: "d1", rv: 0, muid: 1 }))
+      .then(adopt("a1", "d1"))
+      .expect(effective("a1") and safety)
+
+  // a crashes while it holds d1. b expires a's lease, deletes its Member,
+  // and clears d1. When a comes back, its claim is Lost.
+  run reclaimTest =
+    init
+      .then(join("a"))
+      .then(bindSend("a1", "d1"))
+      .then(bindLand({ cluster: "a", claim: "a1", dev: "d1", rv: 0, muid: 1 }))
+      .then(adopt("a1", "d1"))
+      .then(observe("b", "a"))
+      .then(crash("a"))
+      .then(tickBy(fastB))
+      .then(tickBy(fastB))
+      .then(tickBy(fastB))
+      .then(sweepDelete("b", "a"))
+      .then(sweepListDevices("b"))
+      .then(sweepListMembers("b"))
+      .then(sweepClear("b", "d1"))
+      .expect(safety and s.devices.get("d1").ref == Free)
+      .then(recover("a"))
+      .then(join("a"))
+      .expect(safety and s.claims.get("a1").phase == "Lost")
+
+  // The steps of the adopt-any-uid negative model. Here adopt must fail,
+  // because d1 names the old member UID.
+  run staleAdoptBlockedTest =
+    init
+      .then(join("a"))
+      .then(bindSend("a1", "d1"))
+      .then(bindLand({ cluster: "a", claim: "a1", dev: "d1", rv: 0, muid: 1 }))
+      .then(observe("b", "a"))
+      .then(tickBy(fastB))
+      .then(tickBy(fastB))
+      .then(tickBy(fastB))
+      .then(sweepDelete("b", "a"))
+      .then(renewSend("a"))
+      .then(renewLand("a"))
+      .then(join("a"))
+      .then(adopt("a1", "d1").fail())
 }
