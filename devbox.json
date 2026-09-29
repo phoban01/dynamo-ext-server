@@ -1,0 +1,44 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.16.0/.schema/devbox.schema.json",
+  "packages": {
+    "go": "1.26",
+    "nodejs": "22",
+    "quint": "0.32.0",
+    "jdk17": "latest",
+    "kind": "latest",
+    "kubectl": "latest",
+    "awscli2": "latest",
+    "rustup": "latest",
+    "golangci-lint": "latest",
+    "util-linux": "latest",
+    "pkg-config": "latest",
+    "openssl": {
+      "version": "latest",
+      "outputs": ["out", "dev"]
+    }
+  },
+  "env": {
+    "JVM_ARGS": "-Xmx3g",
+    "JAVA_TOOL_OPTIONS": "-Xmx3g",
+    "GOFLAGS": "-p=4",
+    "SIM_SHARDS": "4",
+    "CARGO_BUILD_JOBS": "4",
+    "RUSTUP_HOME": "$DEVBOX_PROJECT_ROOT/.devbox/rustup",
+    "CARGO_HOME": "$DEVBOX_PROJECT_ROOT/.devbox/cargo",
+    "PATH": "$DEVBOX_PROJECT_ROOT/.devbox/cargo/bin:$PATH"
+  },
+  "shell": {
+    "scripts": {
+      "test": "scripts/test.sh",
+      "sim-gate": "scripts/sim-gate.sh",
+      "e2e": "scripts/e2e.sh",
+      "duvet-install": "scripts/duvet-install.sh",
+      "duvet": "duvet report --ci",
+      "verify": [
+        "scripts/test.sh",
+        "scripts/quint-check.sh",
+        "duvet report --ci"
+      ]
+    }
+  }
+}
