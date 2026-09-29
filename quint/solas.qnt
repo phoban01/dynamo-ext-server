@@ -400,12 +400,128 @@ module solas {
     }
   }
 
+  // ---- Bind, spec 5.3 and 6.3 ----
+
+  pure def refClaim(ref: OptRef): str = match ref {
+    | Held(r) => r.claim
+    | Free => ""
+  }
+
+  // Set the device ref and give the write a new rv.
+  def writeRef(d: str, ref: OptRef): State = {
+    val rv = s.devCounter + 1
+    { ...s, devices: s.devices.set(d, { rv: rv, ref: ref }), devCounter: rv }
+  }
+
+  // Put a bind in flight. The rv comes from a consistent read. The
+  // controller adopts first, so no device may name the claim with the
+  // current member UID.
+  action bindSend(k: str, d: str): bool = {
+    val c = CFG.owner.get(k)
+    val cl = s.clusters.get(c)
+    val cm = s.claims.get(k)
+    val dv = s.devices.get(d)
+    all {
+      localLive(c),
+      not(cl.draining),
+      cm.exists,
+      not(cm.deleting),
+      cm.phase == "Pending",
+      CFG.devices.forall(e => not(namesWith(s.devices.get(e).ref, k, cl.uid))),
+      isFree(dv.ref),
+      s.inflight.size() < 3,
+      s' = {
+        ...s,
+        inflight: s.inflight.union(Set({
+          cluster: c, claim: k, dev: d, rv: dv.rv, muid: cl.uid,
+        })),
+      },
+    }
+  }
+
+  // The bind lands at any later time. The server applies it on the rv
+  // condition and rejects a change from one holder to another.
+  action bindLand(msg: BindMsg): bool = {
+    val dv = s.devices.get(msg.dev)
+    val ref = Held({ member: msg.cluster, muid: msg.muid, claim: msg.claim })
+    val ok = CFG.unconditionalBind
+      or (dv.rv == msg.rv and (isFree(dv.ref) or dv.ref == ref))
+    val rest = s.inflight.exclude(Set(msg))
+    all {
+      s.inflight.contains(msg),
+      if (ok)
+        s' = { ...writeRef(msg.dev, ref), inflight: rest }
+      else
+        s' = { ...s, inflight: rest },
+    }
+  }
+
+  action landSome = all {
+    s.inflight.size() > 0,
+    nondet msg = s.inflight.oneOf()
+    bindLand(msg),
+  }
+
+  // Adopt a device that already names the claim with the current member
+  // UID. The adoptAnyUid flag drops the UID check.
+  action adopt(k: str, d: str): bool = {
+    val c = CFG.owner.get(k)
+    val cl = s.clusters.get(c)
+    val cm = s.claims.get(k)
+    val ref = s.devices.get(d).ref
+    all {
+      active(cl),
+      cl.uid != 0,
+      not(cl.draining),
+      cm.exists,
+      not(cm.deleting),
+      cm.phase == "Pending",
+      if (CFG.adoptAnyUid) names(ref, k) else namesWith(ref, k, cl.uid),
+      s' = {
+        ...s,
+        claims: s.claims.set(k, { ...cm, phase: "Bound", dev: d, muid: cl.uid }),
+      },
+    }
+  }
+
+  // Release a second device that names a claim. Keep the claim's device.
+  action releaseDuplicate(k: str, d: str): bool = {
+    val cl = s.clusters.get(CFG.owner.get(k))
+    val cm = s.claims.get(k)
+    all {
+      active(cl),
+      cm.phase == "Bound" or cm.phase == "Suspended",
+      d != cm.dev,
+      names(s.devices.get(d).ref, k),
+      s' = writeRef(d, Free),
+    }
+  }
+
+  // Clear a ref that names this member and a claim that no longer exists.
+  // A bind can land after the claim's release removed the finalizer.
+  action clearOrphan(c: str, d: str): bool = {
+    val cl = s.clusters.get(c)
+    val ref = s.devices.get(d).ref
+    all {
+      active(cl),
+      refMember(ref) == c,
+      not(s.claims.get(refClaim(ref)).exists),
+      s' = writeRef(d, Free),
+    }
+  }
+
   action step = any {
     tick,
+    landSome,
     nondet c = CFG.clusters.oneOf()
     nondet m = CFG.clusters.oneOf()
     nondet d = CFG.devices.oneOf()
+    nondet k = CFG.claims.oneOf()
     any {
+      bindSend(k, d),
+      adopt(k, d),
+      releaseDuplicate(k, d),
+      clearOrphan(c, d),
       join(c),
       renewSend(c),
       renewLand(c),
