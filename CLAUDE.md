@@ -73,6 +73,8 @@ Claude Code session, so heavy jobs must not overlap.
   ([docs/adr/0005-member-uid-fencing.md](docs/adr/0005-member-uid-fencing.md)).
 - Tests and the demo use amazon/dynamodb-local, not LocalStack
   ([docs/adr/0007-dynamodb-local.md](docs/adr/0007-dynamodb-local.md)).
+- Fencing tokens guard device use
+  ([docs/adr/0008-fencing-tokens.md](docs/adr/0008-fencing-tokens.md)).
 - The API group is `solas.dev/v1alpha1`
   ([docs/adr/0006-api-group.md](docs/adr/0006-api-group.md)).
 

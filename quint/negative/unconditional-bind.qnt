@@ -14,5 +14,6 @@ module unconditional_bind {
     unconditionalBind: true,
     membersFirst: false,
     adoptAnyUid: false,
+    noTokenCheck: false,
   }).* from "../solas"
 }

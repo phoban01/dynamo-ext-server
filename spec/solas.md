@@ -242,6 +242,7 @@ A `claimRef` MUST hold the member name, the member UID, the claim
 namespace, the claim name, and the claim UID.
 A device is free when it has no `claimRef`.
 A device is bound when it has a `claimRef`.
+`Device.status.fencingToken` holds the fencing token of the last bind.
 
 ### 5.3. Status updates
 
@@ -252,6 +253,13 @@ holder to a different holder.
 A holder is different when any field of `claimRef` differs.
 To move a device, a client MUST first clear `claimRef` and then set it
 in a second update.
+When a status update sets `claimRef` on a free device, the server MUST
+set `status.fencingToken` to the old value plus 1.
+The first bind of a device gets token 1.
+The server MUST ignore the `status.fencingToken` that a client sends.
+In every other status update, the server MUST keep the old token.
+The token of a device never goes down, so a later bind always has a
+higher token.
 The server MUST reject a status update that sets a `claimRef` with an
 empty field.
 
@@ -279,6 +287,7 @@ labels.
 `DeviceClaim.status.deviceName` names the bound device.
 `DeviceClaim.status.memberUID` records the member UID that bound the
 claim.
+`DeviceClaim.status.fencingToken` records the fencing token of the bind.
 
 ### 6.2. Controller
 
@@ -318,6 +327,7 @@ and MUST NOT retry with the old version.
 After a successful bind, the controller MUST set the claim phase to
 `Bound`.
 It MUST also set `status.deviceName` and `status.memberUID`.
+It MUST also set `status.fencingToken` to the fencing token of the device.
 The controller MUST NOT set a claim to `Bound` from a bind that carried
 an older member UID.
 
@@ -366,9 +376,30 @@ Workloads MUST use a device only while its claim is in effect.
 The safety properties in section 8.4 are about claims in effect.
 
 The controller can set a claim to `Suspended` only some time after its
-lease ends.
-So the phase alone does not tell a workload that the claim is in effect.
-How a workload learns the end of the lease is an open question.
+lease ends, and a paused workload can act on an old phase.
+So the phase alone cannot keep an old holder away from a device.
+Fencing tokens do, as section 6.6 describes.
+
+### 6.6. Device use
+
+A workload MUST present the fencing token of its claim each time it uses
+the device.
+The device MUST remember the highest token that it has accepted.
+The device MUST reject a use with a token lower than the highest token
+that it has accepted.
+The device MUST accept a use with a token equal to or higher than the
+highest token that it has accepted, and record that token as the highest.
+A device that cannot check tokens MUST sit behind a gatekeeper that
+checks them.
+
+A bind gives the device a higher token, spec 5.3.
+So once the new holder has used the device, the device rejects the old
+holder, however long the old holder paused.
+The old holder can still use the device after a reclaim and before the
+new holder's first use.
+The device sees these uses in one order, so they never overlap.
+The lease margin `M` decides when a sweeper may reclaim.
+It does not decide whether two holders use a device at once.
 
 ## 7. Membership
 
@@ -500,5 +531,8 @@ The Quint model checks these properties:
 - A watch from `r` sees every event after `r` in order, or it gets
   `410 Gone`.
 - A device whose member leaves or crashes becomes free.
+- Each fencing token of a device belongs to one bind.
+- A device never accepts a use from an older bind after it has accepted
+  a use from a newer bind.
 - A claim for a free, matching device becomes `Bound` while its member
   is live.
