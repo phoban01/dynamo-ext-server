@@ -2,26 +2,26 @@ SPECIFICATION: [Solas specification](spec/solas.md)
   SECTION: [2.1. Table](#2-1-table)
     TEXT[!MUST]: All member clusters MUST use the same table.
     TEXT[!MUST]: The table MUST be in one AWS region.
-    TEXT[!MUST]: The table MUST have a string partition key named `pk` and a string sort
-    TEXT[!MUST]: key named `sk`.
-    TEXT[!MUST]: The table MUST enable TTL on the attribute `expires`.
-    TEXT[!MUST]: The table name MUST be a setting of the API server.
+    TEXT[!MUST,implementation]: The table MUST have a string partition key named `pk` and a string sort
+    TEXT[!MUST,implementation]: key named `sk`.
+    TEXT[!MUST,implementation]: The table MUST enable TTL on the attribute `expires`.
+    TEXT[!MUST,implementation]: The table name MUST be a setting of the API server.
 
   SECTION: [2.2. Items](#2-2-items)
-    TEXT[!MUST]: An object item MUST have `pk` equal to `obj#` followed by the resource.
-    TEXT[!MUST]: An object item MUST have `sk` equal to the namespace, a `/`, and the
-    TEXT[!MUST]: object name.
+    TEXT[!MUST,implementation]: An object item MUST have `pk` equal to `obj#` followed by the resource.
+    TEXT[!MUST,implementation]: An object item MUST have `sk` equal to its storage key without the
+    TEXT[!MUST,implementation]: resource prefix and the `/` after it.
     TEXT[!MUST]: An object item MUST hold the resource version of its last write in the
     TEXT[!MUST]: number attribute `rv`.
     TEXT[!MUST]: An object item MUST hold the encoded object in the binary attribute
     TEXT[!MUST]: `value`.
-    TEXT[!MUST]: A counter item MUST have `pk` equal to `rv` and `sk` equal to the
-    TEXT[!MUST]: resource.
+    TEXT[!MUST,implementation]: A counter item MUST have `pk` equal to `rv` and `sk` equal to the
+    TEXT[!MUST,implementation]: resource.
     TEXT[!MUST]: A counter item MUST hold the last issued resource version in the number
     TEXT[!MUST]: attribute `n`.
-    TEXT[!MUST]: An event item MUST have `pk` equal to `ev#` followed by the resource.
-    TEXT[!MUST]: An event item MUST have `sk` equal to its resource version as a decimal
-    TEXT[!MUST]: string, padded with zeros to 20 digits.
+    TEXT[!MUST,implementation]: An event item MUST have `pk` equal to `ev#` followed by the resource.
+    TEXT[!MUST,implementation]: An event item MUST have `sk` equal to its resource version as a decimal
+    TEXT[!MUST,implementation]: string, padded with zeros to 20 digits.
     TEXT[!MUST]: An event item MUST hold the event type in the attribute `type`.
     TEXT[!MUST]: The event type MUST be one of `ADDED`, `MODIFIED`, or `DELETED`.
     TEXT[!MUST]: An event item MUST hold the encoded new object in `value`.
@@ -91,7 +91,7 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST]: Each write MUST add one event item to the event log of its resource.
     TEXT[!MUST]: The event item MUST have the same resource version as the write.
     TEXT[!MUST]: An event item MUST expire a set retention time after its write.
-    TEXT[!MUST]: The retention time MUST be a setting of the API server.
+    TEXT[!MUST,implementation]: The retention time MUST be a setting of the API server.
     TEXT[!MUST]: The server MUST NOT depend on the time at which DynamoDB deletes an
     TEXT[!MUST]: expired item.
 

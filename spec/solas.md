@@ -49,9 +49,10 @@ The table holds three kinds of item: object items, counter items, and
 event items.
 
 An object item MUST have `pk` equal to `obj#` followed by the resource.
-An object item MUST have `sk` equal to the namespace, a `/`, and the
-object name.
-For a cluster-scoped object, the namespace part of `sk` is empty.
+An object item MUST have `sk` equal to its storage key without the
+resource prefix and the `/` after it.
+For a namespaced object, `sk` is the namespace, a `/`, and the name.
+For a cluster-scoped object, `sk` is the name.
 An object item MUST hold the resource version of its last write in the
 number attribute `rv`.
 An object item MUST hold the encoded object in the binary attribute
