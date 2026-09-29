@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solas-apiserver
+  namespace: solas-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: solas-apiserver
+  template:
+    metadata:
+      labels:
+        app: solas-apiserver
+    spec:
+      serviceAccountName: solas-apiserver
+      containers:
+        - name: apiserver
+          image: solas-apiserver:dev
+          imagePullPolicy: IfNotPresent
+          args:
+            - --secure-port=8443
+            - --tls-cert-file=/certs/tls.crt
+            - --tls-private-key-file=/certs/tls.key
+            - --dynamodb-endpoint=$(DYNAMODB_ENDPOINT)
+            - --dynamodb-table=solas
+            - --dynamodb-create-table
+          env:
+            # The endpoint and credentials come from this Secret, so each
+            # member cluster can point at the shared table.
+            - name: DYNAMODB_ENDPOINT
+              valueFrom:
+                secretKeyRef: {name: solas-dynamodb, key: endpoint}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: {name: solas-dynamodb, key: accessKeyID}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: {name: solas-dynamodb, key: secretAccessKey}
+          ports:
+            - containerPort: 8443
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8443, scheme: HTTPS}
+          livenessProbe:
+            httpGet: {path: /livez, port: 8443, scheme: HTTPS}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          volumeMounts:
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+      volumes:
+        - name: certs
+          secret:
+            secretName: solas-apiserver-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: solas-apiserver
+  namespace: solas-system
+spec:
+  selector:
+    app: solas-apiserver
+  ports:
+    - port: 443
+      targetPort: 8443

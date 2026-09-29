@@ -1,0 +1,14 @@
+# hack/gen-certs.sh sets spec.caBundle.
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.solas.dev
+spec:
+  group: solas.dev
+  version: v1alpha1
+  groupPriorityMinimum: 1000
+  versionPriority: 15
+  service:
+    name: solas-apiserver
+    namespace: solas-system
+    port: 443
