@@ -277,8 +277,10 @@ So a bind that commits before the delete makes the delete fail.
 
 ### 6.1. Resource
 
-`DeviceClaim` MUST be a namespaced CRD in the group `solas.dev`, version
-`v1alpha1`.
+`DeviceClaim` MUST be a namespaced CRD in the group `claims.solas.dev`,
+version `v1alpha1`.
+It cannot share `solas.dev/v1alpha1`, because the aggregator sends that
+whole group version to the extension server, ADR 0006.
 Each member cluster MUST store its claims in its own etcd.
 `DeviceClaim.spec.selector` MUST be a label selector over `Device`
 labels.

@@ -268,6 +268,13 @@ func schema_pkg_apis_solas_v1alpha1_DeviceStatus(ref common.ReferenceCallback) c
 							Ref:         ref(v1alpha1.ClaimRef{}.OpenAPIModelName()),
 						},
 					},
+					"fencingToken": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FencingToken is the fencing token of the last bind. The server sets it on each bind and ignores the value a client sends.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 				},
 			},
 		},

@@ -19,6 +19,8 @@ cleanup() {
     echo "smoke: FAILED; pods and events:"
     kubectl -n solas-system get pods -o wide 2>/dev/null || true
     kubectl -n solas-system get events --sort-by=.lastTimestamp 2>/dev/null | tail -15 || true
+    echo "smoke: logs of the controller:"
+    kubectl -n solas-system logs deploy/solas-controller --tail=30 2>/dev/null || true
     echo "smoke: logs of the API server:"
     kubectl -n solas-system logs deploy/solas-apiserver --tail=50 2>/dev/null || true
   fi
@@ -43,9 +45,10 @@ expect_fail() {
 step "create k3d cluster $cluster"
 cluster_create "$cluster" "$KUBECONFIG"
 
-step "build and load the image"
-docker build -q -t solas-apiserver:dev . >/dev/null
+step "build and load the images"
+scripts/images.sh >/dev/null
 image_import solas-apiserver:dev "$cluster"
+image_import solas-controller:dev "$cluster"
 
 step "deploy dynamodb-local and the API server"
 kubectl apply -f deploy/apiserver/namespace.yaml >/dev/null
@@ -80,6 +83,13 @@ expect_fail "move d1 to claim c2" \
   kubectl patch device d1 --subresource=status --type=merge -p "$(ref c2)"
 expect_fail "delete bound device d1" kubectl delete device d1
 
+test "$(kubectl get device d1 -o jsonpath='{.status.fencingToken}')" = 1
+
+step "release d1, bind it again, and check the token goes up"
+kubectl patch device d1 --subresource=status --type=merge -p '{"status":{"claimRef":null}}' >/dev/null
+kubectl patch device d1 --subresource=status --type=merge -p "$(ref c3)" >/dev/null
+test "$(kubectl get device d1 -o jsonpath='{.status.fencingToken}')" = 2
+
 step "release d1, then delete it"
 kubectl patch device d1 --subresource=status --type=merge -p '{"status":{"claimRef":null}}' >/dev/null
 kubectl delete device d1 >/dev/null
@@ -92,5 +102,41 @@ metadata:
   name: cluster-a
 YAML
 test "$(kubectl get member cluster-a -o jsonpath='{.spec.leaseDurationSeconds}/{.status.phase}')" = "30/Active"
+
+step "deploy the controller as member smoke"
+kubectl apply -f deploy/controller/crd.yaml >/dev/null
+kubectl wait --for=condition=Established crd/deviceclaims.claims.solas.dev --timeout=60s >/dev/null
+kubectl -n solas-system create configmap solas-member --from-literal=clusterID=smoke >/dev/null
+kubectl apply -f deploy/controller/ >/dev/null
+kubectl -n solas-system rollout status deploy/solas-controller --timeout=120s >/dev/null
+for _ in $(seq 30); do kubectl get member smoke >/dev/null 2>&1 && break; sleep 1; done
+test "$(kubectl get member smoke -o jsonpath='{.status.phase}')" = Active
+
+step "a claim binds a device"
+kubectl apply -f - >/dev/null <<YAML
+apiVersion: solas.dev/v1alpha1
+kind: Device
+metadata:
+  name: gpu-1
+  labels: {kind: gpu}
+YAML
+kubectl create namespace work >/dev/null
+kubectl apply -f - >/dev/null <<YAML
+apiVersion: claims.solas.dev/v1alpha1
+kind: DeviceClaim
+metadata:
+  name: job
+  namespace: work
+spec:
+  selector:
+    matchLabels: {kind: gpu}
+YAML
+kubectl -n work wait --for=jsonpath='{.status.phase}'=Bound deviceclaim/job --timeout=60s >/dev/null
+kubectl -n work get deviceclaims
+test "$(kubectl get device gpu-1 -o jsonpath='{.status.claimRef.member}/{.status.fencingToken}')" = smoke/1
+
+step "deleting the claim frees the device"
+kubectl -n work delete deviceclaim job --timeout=60s >/dev/null
+test -z "$(kubectl get device gpu-1 -o jsonpath='{.status.claimRef}')"
 
 step "PASS"

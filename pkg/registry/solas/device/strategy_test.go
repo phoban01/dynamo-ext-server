@@ -73,3 +73,39 @@ func TestStatusUpdateRejectsNewHolder(t *testing.T) {
 		t.Errorf("status strategy rejected a bind of a free device: %v", errs)
 	}
 }
+
+//= spec/solas.md#5-3-status-updates
+//= type=test
+//# When a status update sets `claimRef` on a free device, the server MUST
+//# set `status.fencingToken` to the old value plus 1.
+
+//= spec/solas.md#5-3-status-updates
+//= type=test
+//# The server MUST ignore the `status.fencingToken` that a client sends.
+
+func TestFencingToken(t *testing.T) {
+	ss := NewStatusStrategy(NewStrategy(runtime.NewScheme()))
+	ctx := context.Background()
+	update := func(old *solas.Device, ref *solas.ClaimRef, sent int64) *solas.Device {
+		d := old.DeepCopy()
+		d.Status.ClaimRef = ref
+		d.Status.FencingToken = sent
+		ss.PrepareForUpdate(ctx, d, old)
+		return d
+	}
+	free := dev("x", nil)
+	bound := update(free, ref1, 99)
+	if bound.Status.FencingToken != 1 {
+		t.Fatalf("first bind: token %d, want 1", bound.Status.FencingToken)
+	}
+	if same := update(bound, ref1, 0); same.Status.FencingToken != 1 {
+		t.Errorf("update with the same holder: token %d, want 1", same.Status.FencingToken)
+	}
+	released := update(bound, nil, 0)
+	if released.Status.FencingToken != 1 {
+		t.Errorf("release: token %d, want 1", released.Status.FencingToken)
+	}
+	if again := update(released, ref1, 0); again.Status.FencingToken != 2 {
+		t.Errorf("second bind: token %d, want 2", again.Status.FencingToken)
+	}
+}

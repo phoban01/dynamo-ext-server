@@ -34,7 +34,7 @@
       "e2e": "scripts/e2e.sh",
       "smoke": "scripts/smoke.sh",
       "codegen": "hack/update-codegen.sh",
-      "image": "docker build -t solas-apiserver:dev .",
+      "image": "scripts/images.sh",
       "duvet-install": "scripts/duvet-install.sh",
       "duvet": "rm -rf .duvet/requirements && duvet report --ci",
       "duvet-report": "rm -rf .duvet/requirements && duvet report",

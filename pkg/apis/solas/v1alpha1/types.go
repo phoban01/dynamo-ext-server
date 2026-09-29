@@ -31,6 +31,10 @@ type DeviceStatus struct {
 	// ClaimRef names the holder. A device with no claimRef is free.
 	// +optional
 	ClaimRef *ClaimRef `json:"claimRef,omitempty"`
+	// FencingToken is the fencing token of the last bind. The server sets it
+	// on each bind and ignores the value a client sends.
+	// +optional
+	FencingToken int64 `json:"fencingToken,omitempty"`
 }
 
 // ClaimRef names the claim that holds a device.

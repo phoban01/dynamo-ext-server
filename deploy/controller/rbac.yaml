@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: solas-controller
+  namespace: solas-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: solas-controller
+rules:
+  - apiGroups: ["claims.solas.dev"]
+    resources: ["deviceclaims"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["claims.solas.dev"]
+    resources: ["deviceclaims/status", "deviceclaims/finalizers"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["solas.dev"]
+    resources: ["devices"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["solas.dev"]
+    resources: ["devices/status"]
+    verbs: ["get", "update"]
+  - apiGroups: ["solas.dev"]
+    resources: ["members"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["solas.dev"]
+    resources: ["members/status"]
+    verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: solas-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: solas-controller
+subjects:
+  - kind: ServiceAccount
+    name: solas-controller
+    namespace: solas-system
+---
+# The leader election lease lives in this cluster, spec 6.2.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: solas-controller-leader-election
+  namespace: solas-system
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: solas-controller-leader-election
+  namespace: solas-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: solas-controller-leader-election
+subjects:
+  - kind: ServiceAccount
+    name: solas-controller
+    namespace: solas-system

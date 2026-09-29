@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solas-controller
+  namespace: solas-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: solas-controller
+  template:
+    metadata:
+      labels:
+        app: solas-controller
+    spec:
+      serviceAccountName: solas-controller
+      containers:
+        - name: controller
+          image: solas-controller:dev
+          imagePullPolicy: IfNotPresent
+          args:
+            - --cluster-id=$(CLUSTER_ID)
+          env:
+            # Each member cluster sets its own ID in this ConfigMap.
+            - name: CLUSTER_ID
+              valueFrom:
+                configMapKeyRef: {name: solas-member, key: clusterID}
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8081}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8081}
+          resources:
+            requests: {cpu: 20m, memory: 32Mi}
+            limits: {memory: 128Mi}
