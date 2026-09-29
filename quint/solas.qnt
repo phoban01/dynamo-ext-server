@@ -114,7 +114,25 @@ module solas {
     someLeft: false,
   }
 
-  action step = s' = s
+  // ---- Time, spec 7.5 ----
+
+  // Real time moves by one tick. Each clock moves by one tick plus or
+  // minus the drift, so the rate drift bound rho is drift / tick.
+  action tick = {
+    nondet adv = setOfMaps(CFG.clusters, Set(-CFG.drift, 0, CFG.drift)).oneOf()
+    s' = {
+      ...s,
+      now: s.now + CFG.tick,
+      clusters: s.clusters.keys().mapBy(c => {
+        ...s.clusters.get(c),
+        clock: s.clusters.get(c).clock + CFG.tick + adv.get(c),
+      }),
+    }
+  }
+
+  action step = any {
+    tick,
+  }
 }
 
 // Two clusters, two devices, and three claims. The clocks start far
