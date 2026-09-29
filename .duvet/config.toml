@@ -16,9 +16,8 @@ pattern = "sim/**/*.go"
 [[source]]
 pattern = "test/**/*.go"
 
-# The specification lands in milestone M1.
-# [[specification]]
-# source = "spec/solas.md"
+[[specification]]
+source = "spec/solas.md"
 
 [report.html]
 enabled = true

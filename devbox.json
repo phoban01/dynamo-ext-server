@@ -33,11 +33,12 @@
       "sim-gate": "scripts/sim-gate.sh",
       "e2e": "scripts/e2e.sh",
       "duvet-install": "scripts/duvet-install.sh",
-      "duvet": "duvet report --ci",
+      "duvet": "rm -rf .duvet/requirements && duvet report --ci",
+      "duvet-report": "rm -rf .duvet/requirements && duvet report",
       "verify": [
         "scripts/test.sh",
         "scripts/quint-check.sh",
-        "duvet report --ci"
+        "rm -rf .duvet/requirements && duvet report --ci"
       ]
     }
   }
