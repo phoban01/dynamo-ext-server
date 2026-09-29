@@ -20,11 +20,23 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - --cluster-id=$(CLUSTER_ID)
+            - --lease-duration=$(LEASE_DURATION)
+            - --lease-margin=$(LEASE_MARGIN)
+            - --sweep-interval=$(SWEEP_INTERVAL)
           env:
             # Each member cluster sets its own ID in this ConfigMap.
             - name: CLUSTER_ID
               valueFrom:
                 configMapKeyRef: {name: solas-member, key: clusterID}
+            - name: LEASE_DURATION
+              valueFrom:
+                configMapKeyRef: {name: solas-member, key: leaseDuration}
+            - name: LEASE_MARGIN
+              valueFrom:
+                configMapKeyRef: {name: solas-member, key: leaseMargin}
+            - name: SWEEP_INTERVAL
+              valueFrom:
+                configMapKeyRef: {name: solas-member, key: sweepInterval}
           readinessProbe:
             httpGet: {path: /readyz, port: 8081}
           livenessProbe:
