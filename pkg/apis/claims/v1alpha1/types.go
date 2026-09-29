@@ -23,14 +23,14 @@ const (
 // ReleaseFinalizer keeps a claim until its device is released, spec 6.3.
 const ReleaseFinalizer = "solas.dev/release"
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 //= spec/solas.md#6-1-resource
 //# `DeviceClaim` MUST be a namespaced CRD in the group `claims.solas.dev`,
 //# version `v1alpha1`.
 
 //= spec/solas.md#6-1-resource
 //# Each member cluster MUST store its claims in its own etcd.
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // DeviceClaim asks for one device. It lives in the etcd of its cluster.
 type DeviceClaim struct {
