@@ -67,9 +67,9 @@ func TestListExactVersion(t *testing.T) {
 		rv   uint64
 		want func(error) bool
 	}{
-		{rv: 2, want: func(err error) bool { return err == nil }},
-		{rv: 1, want: apierrors.IsResourceExpired},
-		{rv: 3, want: storage.IsTooLargeResourceVersion},
+		{rv: 3, want: func(err error) bool { return err == nil }},
+		{rv: 2, want: apierrors.IsResourceExpired},
+		{rv: 4, want: storage.IsTooLargeResourceVersion},
 	} {
 		opts := storage.ListOptions{
 			Recursive:            true,
@@ -112,9 +112,9 @@ func TestListRetriesWhenAWriteLandsDuringTheQuery(t *testing.T) {
 	if err := s.GetList(ctx, "/pods/", storage.ListOptions{Recursive: true, Predicate: storage.Everything}, list); err != nil {
 		t.Fatal(err)
 	}
-	// The first attempt saw only "a" at version 1, but the counter moved to
-	// 2. The retry must return both objects at version 2.
-	if list.ResourceVersion != "2" || len(list.Items) != 2 {
-		t.Errorf("list = rv %s with %d items, want rv 2 with 2 items", list.ResourceVersion, len(list.Items))
+	// The first attempt saw only "a" at version 2, but the counter moved to
+	// 3. The retry must return both objects at version 3.
+	if list.ResourceVersion != "3" || len(list.Items) != 2 {
+		t.Errorf("list = rv %s with %d items, want rv 3 with 2 items", list.ResourceVersion, len(list.Items))
 	}
 }

@@ -22,6 +22,9 @@ const (
 	attrType    = "type"
 	attrKey     = "key"
 	attrExpires = "expires"
+
+	// eventInit is the type of the event that creates a counter.
+	eventInit = "INIT"
 )
 
 // TableAPI is the part of the DynamoDB client that EnsureTable uses.

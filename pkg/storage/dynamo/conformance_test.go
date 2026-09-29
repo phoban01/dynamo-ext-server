@@ -88,6 +88,40 @@ func TestConformance(t *testing.T) {
 	run("NamespaceScopedList", func(ctx context.Context, t *testing.T, s *store) {
 		storagetesting.RunTestNamespaceScopedList(ctx, t, s)
 	})
+
+	watches := map[string]func(context.Context, *testing.T, *store){
+		"Watch":                func(c context.Context, t *testing.T, s *store) { storagetesting.RunTestWatch(c, t, s) },
+		"ClusterScopedWatch":   func(c context.Context, t *testing.T, s *store) { storagetesting.RunTestClusterScopedWatch(c, t, s) },
+		"NamespaceScopedWatch": func(c context.Context, t *testing.T, s *store) { storagetesting.RunTestNamespaceScopedWatch(c, t, s) },
+		"DeleteTriggerWatch":   func(c context.Context, t *testing.T, s *store) { storagetesting.RunTestDeleteTriggerWatch(c, t, s) },
+		"WatchFromNonZero":     func(c context.Context, t *testing.T, s *store) { storagetesting.RunTestWatchFromNonZero(c, t, s) },
+		"DelayedWatchDelivery": func(c context.Context, t *testing.T, s *store) { storagetesting.RunTestDelayedWatchDelivery(c, t, s) },
+		"WatchContextCancel":   func(c context.Context, t *testing.T, s *store) { storagetesting.RunTestWatchContextCancel(c, t, s) },
+		"WatcherTimeout":       func(c context.Context, t *testing.T, s *store) { storagetesting.RunTestWatcherTimeout(c, t, s) },
+		"WatchDeleteEventObjectHaveLatestRV": func(c context.Context, t *testing.T, s *store) {
+			storagetesting.RunTestWatchDeleteEventObjectHaveLatestRV(c, t, s)
+		},
+		"WatchInitializationSignal": func(c context.Context, t *testing.T, s *store) {
+			storagetesting.RunTestWatchInitializationSignal(c, t, s)
+		},
+		"ProgressNotify": func(c context.Context, t *testing.T, s *store) {
+			storagetesting.RunOptionalTestProgressNotify(c, t, s, increaseRV(s))
+		},
+		"WatchDispatchBookmarkEvents": func(c context.Context, t *testing.T, s *store) {
+			storagetesting.RunTestWatchDispatchBookmarkEvents(c, t, s, false)
+		},
+		"SendInitialEventsBackwardCompatibility": func(c context.Context, t *testing.T, s *store) {
+			storagetesting.RunSendInitialEventsBackwardCompatibility(c, t, s)
+		},
+		"WatchSemantics": func(c context.Context, t *testing.T, s *store) { storagetesting.RunWatchSemantics(c, t, s) },
+		"WatchSemanticInitialEventsExtended": func(c context.Context, t *testing.T, s *store) {
+			storagetesting.RunWatchSemanticInitialEventsExtended(c, t, s)
+		},
+		"WatchListMatchSingle": func(c context.Context, t *testing.T, s *store) { storagetesting.RunWatchListMatchSingle(c, t, s) },
+	}
+	for name, f := range watches {
+		run(name, f)
+	}
 }
 
 // noTransformer satisfies InterfaceWithPrefixTransformer for tests that

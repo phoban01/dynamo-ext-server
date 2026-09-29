@@ -107,17 +107,6 @@ func (s *store) transaction(w write, n, next uint64) *dynamodb.TransactWriteItem
 func (s *store) counterAction(n, next uint64) types.TransactWriteItem {
 	pk, sk := s.counterKey()
 	key := map[string]types.AttributeValue{attrPK: str(pk), attrSK: str(sk)}
-	if n == 0 {
-		//= spec/solas.md#2-3-writes
-		//# If the counter item does not exist, the counter update MUST create it
-		//# with `n` equal to 1, on condition that it still does not exist.
-		item := map[string]types.AttributeValue{attrPK: str(pk), attrSK: str(sk), attrN: num(next)}
-		return types.TransactWriteItem{Put: &types.Put{
-			TableName:           aws.String(s.table),
-			Item:                item,
-			ConditionExpression: aws.String("attribute_not_exists(pk)"),
-		}}
-	}
 	//= spec/solas.md#2-3-writes
 	//# The counter update MUST set `n` to `n + 1` on condition that `n` still
 	//# has the value that the server read.
@@ -204,7 +193,8 @@ func (s *store) eventAction(w write, next uint64) types.TransactWriteItem {
 		attrType: str(string(eventType)),
 		attrKey:  str(w.sk),
 		//= spec/solas.md#2-2-items
-		//# An event item MUST hold the encoded new object in `value`.
+		//# An `ADDED`, `MODIFIED`, or `DELETED` event item MUST hold the encoded
+		//# object in `value`.
 		attrValue: &types.AttributeValueMemberB{Value: w.value},
 		//= spec/solas.md#2-2-items
 		//# An event item MUST hold its expiry time, in Unix seconds, in `expires`.
@@ -228,23 +218,65 @@ func (s *store) eventAction(w write, next uint64) types.TransactWriteItem {
 	}}
 }
 
-// readCounter returns the last issued resource version.
+// readCounter returns the last issued resource version. It creates the
+// counter when it does not exist.
 func (s *store) readCounter(ctx context.Context) (uint64, error) {
+	for {
+		pk, sk := s.counterKey()
+		out, err := s.client.GetItem(ctx, &dynamodb.GetItemInput{
+			TableName: aws.String(s.table),
+			Key:       map[string]types.AttributeValue{attrPK: str(pk), attrSK: str(sk)},
+			//= spec/solas.md#2-4-reads
+			//# Every read of a counter item MUST be a strongly consistent read.
+			ConsistentRead: aws.Bool(true),
+		})
+		if err != nil {
+			return 0, fmt.Errorf("read counter: %w", err)
+		}
+		if out.Item != nil {
+			return numAttr(out.Item, attrN)
+		}
+		if err := s.initCounter(ctx); err != nil {
+			return 0, err
+		}
+	}
+}
+
+// initCounter creates the counter at 1 with an INIT event at version 1.
+// Kubernetes rejects 0 as the resource version of a list, so the counter
+// never shows 0. The INIT event keeps the event log free of gaps.
+func (s *store) initCounter(ctx context.Context) error {
 	pk, sk := s.counterKey()
-	out, err := s.client.GetItem(ctx, &dynamodb.GetItemInput{
-		TableName: aws.String(s.table),
-		Key:       map[string]types.AttributeValue{attrPK: str(pk), attrSK: str(sk)},
-		//= spec/solas.md#2-4-reads
-		//# Every read of a counter item MUST be a strongly consistent read.
-		ConsistentRead: aws.Bool(true),
+	//= spec/solas.md#3-1-issue
+	//# When the server first uses a resource, it MUST create the counter item
+	//# with `n` equal to 1 and an event item of type `INIT` at version 1, in one
+	//# transaction.
+	_, err := s.client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{
+		ClientRequestToken: aws.String(newToken()),
+		TransactItems: []types.TransactWriteItem{
+			{Put: &types.Put{
+				TableName:           aws.String(s.table),
+				Item:                map[string]types.AttributeValue{attrPK: str(pk), attrSK: str(sk), attrN: num(1)},
+				ConditionExpression: aws.String("attribute_not_exists(pk)"),
+			}},
+			{Put: &types.Put{
+				TableName: aws.String(s.table),
+				Item: map[string]types.AttributeValue{
+					attrPK:      str(s.eventPK()),
+					attrSK:      str(eventSK(1)),
+					attrType:    str(eventInit),
+					attrExpires: num(uint64(s.now().Add(s.retention).Unix())),
+				},
+				ConditionExpression: aws.String("attribute_not_exists(pk)"),
+			}},
+		},
 	})
-	if err != nil {
-		return 0, fmt.Errorf("read counter: %w", err)
+	var tce *types.TransactionCanceledException
+	if err != nil && !errors.As(err, &tce) {
+		return fmt.Errorf("create counter: %w", err)
 	}
-	if out.Item == nil {
-		return 0, nil
-	}
-	return numAttr(out.Item, attrN)
+	// Success, or another server created the counter first.
+	return nil
 }
 
 // classify reads the cancellation reasons of a failed transaction. The

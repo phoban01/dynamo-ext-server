@@ -5,14 +5,16 @@ package dynamo
 import (
 	"context"
 	"errors"
+
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
 )
 
@@ -26,9 +28,10 @@ type API interface {
 
 // Default settings.
 const (
-	DefaultTable          = "solas"
-	DefaultEventRetention = time.Hour
-	DefaultPollInterval   = 200 * time.Millisecond
+	DefaultTable            = "solas"
+	DefaultEventRetention   = time.Hour
+	DefaultPollInterval     = 200 * time.Millisecond
+	DefaultProgressInterval = time.Minute
 )
 
 // Config holds the settings that all stores of one API server share.
@@ -41,22 +44,27 @@ type Config struct {
 	//# The retention time MUST be a setting of the API server.
 	EventRetention time.Duration
 	PollInterval   time.Duration
+	// ProgressInterval is how often a watch that asked for progress
+	// notifications gets a bookmark.
+	ProgressInterval time.Duration
 }
 
 type store struct {
-	client         API
-	table          string
-	retention      time.Duration
-	pollInterval   time.Duration
-	codec          runtime.Codec
-	versioner      storage.Versioner
-	newFunc        func() runtime.Object
-	newListFunc    func() runtime.Object
-	resourcePrefix string
+	client           API
+	table            string
+	retention        time.Duration
+	pollInterval     time.Duration
+	progressInterval time.Duration
+	codec            runtime.Codec
+	versioner        storage.Versioner
+	newFunc          func() runtime.Object
+	newListFunc      func() runtime.Object
+	resourcePrefix   string
 	// resource names the counter item and the partitions of this resource.
 	resource      string
 	groupResource schema.GroupResource
 	now           func() time.Time
+	watchers      watchers
 }
 
 var _ storage.Interface = &store{}
@@ -78,24 +86,28 @@ func newStore(cfg Config, codec runtime.Codec, newFunc, newListFunc func() runti
 		return nil, fmt.Errorf("dynamo: invalid resource prefix %q", resourcePrefix)
 	}
 	s := &store{
-		client:         cfg.Client,
-		table:          cfg.Table,
-		retention:      cfg.EventRetention,
-		pollInterval:   cfg.PollInterval,
-		codec:          codec,
-		versioner:      storage.APIObjectVersioner{},
-		newFunc:        newFunc,
-		newListFunc:    newListFunc,
-		resourcePrefix: resourcePrefix,
-		resource:       joinPrefix(prefix, strings.TrimSuffix(resourcePrefix, "/")),
-		groupResource:  groupResource,
-		now:            time.Now,
+		client:           cfg.Client,
+		table:            cfg.Table,
+		retention:        cfg.EventRetention,
+		pollInterval:     cfg.PollInterval,
+		progressInterval: cfg.ProgressInterval,
+		codec:            codec,
+		versioner:        storage.APIObjectVersioner{},
+		newFunc:          newFunc,
+		newListFunc:      newListFunc,
+		resourcePrefix:   resourcePrefix,
+		resource:         joinPrefix(prefix, strings.TrimSuffix(resourcePrefix, "/")),
+		groupResource:    groupResource,
+		now:              time.Now,
 	}
 	if s.table == "" {
 		s.table = DefaultTable
 	}
 	if s.retention == 0 {
 		s.retention = DefaultEventRetention
+	}
+	if s.progressInterval == 0 {
+		s.progressInterval = DefaultProgressInterval
 	}
 	if s.pollInterval == 0 {
 		s.pollInterval = DefaultPollInterval
@@ -105,24 +117,50 @@ func newStore(cfg Config, codec runtime.Codec, newFunc, newListFunc func() runti
 
 func (s *store) Versioner() storage.Versioner { return s.versioner }
 
-func (s *store) Watch(ctx context.Context, key string, opts storage.ListOptions) (watch.Interface, error) {
-	return nil, errors.ErrUnsupported
-}
-
+// Stats counts the objects of the resource.
 func (s *store) Stats(ctx context.Context) (storage.Stats, error) {
-	return storage.Stats{}, errors.ErrUnsupported
+	var count int64
+	var from map[string]types.AttributeValue
+	for {
+		out, err := s.client.Query(ctx, &dynamodb.QueryInput{
+			TableName:                 aws.String(s.table),
+			KeyConditionExpression:    aws.String("pk = :pk"),
+			ExpressionAttributeValues: map[string]types.AttributeValue{":pk": str(s.objectPK())},
+			Select:                    types.SelectCount,
+			ExclusiveStartKey:         from,
+		})
+		if err != nil {
+			return storage.Stats{}, fmt.Errorf("count objects: %w", err)
+		}
+		count += int64(out.Count)
+		if out.LastEvaluatedKey == nil {
+			return storage.Stats{ObjectCount: count}, nil
+		}
+		from = out.LastEvaluatedKey
+	}
 }
 
-func (s *store) ReadinessCheck() error { return errors.ErrUnsupported }
+// ReadinessCheck checks that the table can be reached.
+func (s *store) ReadinessCheck() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := s.client.DescribeTable(ctx, &dynamodb.DescribeTableInput{TableName: aws.String(s.table)})
+	if err != nil {
+		return fmt.Errorf("table %s is not ready: %w", s.table, err)
+	}
+	return nil
+}
 
-func (s *store) RequestWatchProgress(ctx context.Context) error { return errors.ErrUnsupported }
-
+// GetCurrentResourceVersion returns the counter of the resource.
 func (s *store) GetCurrentResourceVersion(ctx context.Context) (uint64, error) {
-	return 0, errors.ErrUnsupported
+	return s.readCounter(ctx)
 }
 
-func (s *store) EnableResourceSizeEstimation(storage.KeysFunc) error { return errors.ErrUnsupported }
+// EnableResourceSizeEstimation does nothing. Stats reports no object size.
+func (s *store) EnableResourceSizeEstimation(storage.KeysFunc) error { return nil }
 
+// CompactRevision returns 0: the store does not compact. Expired events end
+// a watch with 410 Gone instead, spec 4.3.
 func (s *store) CompactRevision() int64 { return 0 }
 
 // joinPrefix joins the path prefix and the resource prefix, so that
@@ -138,4 +176,11 @@ func joinPrefix(prefix, resourcePrefix string) string {
 		prefix = prefix[:len(prefix)-1]
 	}
 	return prefix + resourcePrefix
+}
+
+// RequestWatchProgress asks each open watch that set ProgressNotify to send
+// a bookmark with its current resource version.
+func (s *store) RequestWatchProgress(ctx context.Context) error {
+	s.watchers.requestProgress()
+	return nil
 }

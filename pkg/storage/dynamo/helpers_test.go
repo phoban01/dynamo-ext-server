@@ -46,7 +46,7 @@ func newTestStore(t *testing.T) *store {
 	if err := EnsureTable(context.Background(), c, table); err != nil {
 		t.Fatal(err)
 	}
-	s, err := newStore(Config{Client: c, Table: table, PollInterval: 20 * time.Millisecond},
+	s, err := newStore(Config{Client: c, Table: table, PollInterval: 20 * time.Millisecond, ProgressInterval: 200 * time.Millisecond},
 		codec, newPod, newPodList, "/", "/pods/", testGR)
 	if err != nil {
 		t.Fatal(err)

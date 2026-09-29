@@ -48,19 +48,19 @@ func TestCommitSequence(t *testing.T) {
 	s := newTestStore(t)
 
 	rv1, err := s.commit(ctx, write{sk: "/a", action: actCreate, value: []byte("1")})
-	if err != nil || rv1 != 1 {
-		t.Fatalf("create = %d, %v; want 1, nil", rv1, err)
+	if err != nil || rv1 != 2 {
+		t.Fatalf("create = %d, %v; want 2, nil", rv1, err)
 	}
-	rv2, err := s.commit(ctx, write{sk: "/a", action: actUpdate, expectRV: 1, value: []byte("2"), prev: []byte("1")})
-	if err != nil || rv2 != 2 {
-		t.Fatalf("update = %d, %v; want 2, nil", rv2, err)
+	rv2, err := s.commit(ctx, write{sk: "/a", action: actUpdate, expectRV: 2, value: []byte("2"), prev: []byte("1")})
+	if err != nil || rv2 != 3 {
+		t.Fatalf("update = %d, %v; want 3, nil", rv2, err)
 	}
-	rv3, err := s.commit(ctx, write{sk: "/a", action: actDelete, expectRV: 2, value: []byte("2"), prev: []byte("2")})
-	if err != nil || rv3 != 3 {
-		t.Fatalf("delete = %d, %v; want 3, nil", rv3, err)
+	rv3, err := s.commit(ctx, write{sk: "/a", action: actDelete, expectRV: 3, value: []byte("2"), prev: []byte("2")})
+	if err != nil || rv3 != 4 {
+		t.Fatalf("delete = %d, %v; want 4, nil", rv3, err)
 	}
-	if got := eventVersions(t, s); fmt.Sprint(got) != "[1 2 3]" {
-		t.Errorf("event log = %v, want [1 2 3]", got)
+	if got := eventVersions(t, s); fmt.Sprint(got) != "[1 2 3 4]" {
+		t.Errorf("event log = %v, want [1 2 3 4] (1 is INIT)", got)
 	}
 }
 
@@ -85,8 +85,8 @@ func TestCommitObjectConflict(t *testing.T) {
 			t.Errorf("%s: err = %v, want errObjectConflict", tt.name, err)
 		}
 	}
-	if n, err := s.readCounter(ctx); err != nil || n != 1 {
-		t.Errorf("counter = %d, %v; want 1, nil after failed writes", n, err)
+	if n, err := s.readCounter(ctx); err != nil || n != 2 {
+		t.Errorf("counter = %d, %v; want 2, nil after failed writes", n, err)
 	}
 }
 
@@ -116,11 +116,11 @@ func TestCommitConcurrentWritersHaveNoGaps(t *testing.T) {
 
 	sort.Slice(rvs, func(i, j int) bool { return rvs[i] < rvs[j] })
 	for i, rv := range rvs {
-		if rv != uint64(i+1) {
-			t.Fatalf("versions = %v, want 1 to %d with no gaps or repeats", rvs, writers*each)
+		if rv != uint64(i+2) {
+			t.Fatalf("versions = %v, want 2 to %d with no gaps or repeats", rvs, writers*each+1)
 		}
 	}
-	if got := eventVersions(t, s); len(got) != writers*each || got[len(got)-1] != writers*each {
-		t.Errorf("event log = %v, want 1 to %d", got, writers*each)
+	if got := eventVersions(t, s); len(got) != writers*each+1 || got[len(got)-1] != writers*each+1 {
+		t.Errorf("event log = %v, want 1 to %d", got, writers*each+1)
 	}
 }
