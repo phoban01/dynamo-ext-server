@@ -622,6 +622,47 @@ module solas {
     }
   }
 
+  // ---- Invariants, spec 8.4 ----
+
+  // A claim is in effect while it is Bound and its member is live by the
+  // member's own clock. Workloads use a device only then.
+  def effective(k: str): bool = {
+    val cm = s.claims.get(k)
+    cm.exists and not(cm.deleting) and cm.phase == "Bound"
+      and localLive(CFG.owner.get(k))
+  }
+
+  // No two claims in effect hold the same device.
+  val noDoubleBind = CFG.claims.forall(k1 => CFG.claims.forall(k2 =>
+    (k1 != k2 and effective(k1) and effective(k2))
+      implies s.claims.get(k1).dev != s.claims.get(k2).dev
+  ))
+
+  // A claim in effect is named by its device.
+  val claimMatchesDevice = CFG.claims.forall(k =>
+    effective(k) implies names(s.devices.get(s.claims.get(k).dev).ref, k)
+  )
+
+  // A member that is live by its own clock still has its Member. So no
+  // sweeper has deleted it, and no sweeper can clear its refs.
+  val leaseSafety = CFG.clusters.forall(c =>
+    localLive(c) implies (
+      s.members.get(c).exists
+        and s.members.get(c).uid == s.clusters.get(c).uid
+    )
+  )
+
+  val safety = noDoubleBind and claimMatchesDevice and leaseSafety
+
+  // ---- Witnesses ----
+  // Each witness must be violated in a run. A violation shows that the
+  // model reaches the state, so the invariants are not true by accident.
+
+  val witnessBound = CFG.claims.forall(k => not(effective(k)))
+  val witnessCleared = not(s.cleared)
+  val witnessLost = CFG.claims.forall(k => s.claims.get(k).phase != "Lost")
+  val witnessLeft = not(s.someLeft)
+
   action step = any {
     tick,
     landSome,
