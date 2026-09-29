@@ -31,7 +31,7 @@ LocalStack now needs an auth token, so the project uses amazon/dynamodb-local
 
 - Unit tests run with the race detector: `devbox run test`.
 - The simulator gate runs on every protocol change: `devbox run sim-gate`.
-- End-to-end tests use `sigs.k8s.io/e2e-framework` against kind clusters,
+- End-to-end tests use `sigs.k8s.io/e2e-framework` against k3d clusters,
   with plain `testing`. No Ginkgo. No envtest. `devbox run e2e`.
 - Model-based tests replay Quint traces against the real API server.
 - `devbox run verify` runs unit tests, Quint checks, and the Duvet gate.
@@ -56,7 +56,7 @@ Claude Code session, so heavy jobs must not overlap.
 - `devbox run e2e` takes a lock, so a second run waits for the first.
 - A stress run uses one copy of `go test` with a moderate `-count`.
   Do not run many copies at once.
-- Delete kind clusters when a run ends, and delete only clusters whose
+- Delete k3d clusters when a run ends, and delete only clusters whose
   names start with `e2e-`.
 
 ## Architecture decisions already made
@@ -75,6 +75,8 @@ Claude Code session, so heavy jobs must not overlap.
   ([docs/adr/0007-dynamodb-local.md](docs/adr/0007-dynamodb-local.md)).
 - Fencing tokens guard device use
   ([docs/adr/0008-fencing-tokens.md](docs/adr/0008-fencing-tokens.md)).
+- Clusters run with k3d
+  ([docs/adr/0009-k3d.md](docs/adr/0009-k3d.md)).
 - The API group is `solas.dev/v1alpha1`
   ([docs/adr/0006-api-group.md](docs/adr/0006-api-group.md)).
 
@@ -88,6 +90,6 @@ filler, no marketing adjectives, no emoji.
 
 - `quint/` models; `scripts/quint-check.sh` positive and negative checks
 - `.duvet/config.toml` and `.duvet/snapshot.txt` traceability gate
-- `cmd/solas-apiserver/` the extension server; `demo/kind/` three-cluster demo
+- `cmd/solas-apiserver/` the extension server; `demo/k3d/` three-cluster demo
 - `docs/confidence.md` the trust ladder; `docs/sim-gate.md` the simulator
 - `.github/workflows/verify.yml` and `sim-gate.yml` the CI gates

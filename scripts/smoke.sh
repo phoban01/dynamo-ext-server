@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
-# Smoke test: one kind cluster serves kubectl get devices from dynamodb-local.
-# It takes the e2e lock, because a kind cluster uses a lot of memory.
+# Smoke test: one k3d cluster serves kubectl get devices from dynamodb-local.
+# It takes the e2e lock, because heavy runs must not overlap.
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
 cluster=e2e-smoke
+# shellcheck source=scripts/k3d-lib.sh
+source "$root/scripts/k3d-lib.sh"
 
-lock="${TMPDIR:-/tmp}/solas-e2e.lock"
-exec 9>"$lock"
-if ! flock -n 9; then
-  echo "smoke: another run holds $lock, waiting"
-  flock 9
-fi
+e2e_lock
 
 work=$(mktemp -d)
 export KUBECONFIG="$work/kubeconfig"
 cleanup() {
   status=$?
   if [ "$status" -ne 0 ]; then
-    echo "smoke: FAILED; logs of the API server:"
+    echo "smoke: FAILED; pods and events:"
+    kubectl -n solas-system get pods -o wide 2>/dev/null || true
+    kubectl -n solas-system get events --sort-by=.lastTimestamp 2>/dev/null | tail -15 || true
+    echo "smoke: logs of the API server:"
     kubectl -n solas-system logs deploy/solas-apiserver --tail=50 2>/dev/null || true
   fi
-  kind delete cluster --name "$cluster" >/dev/null 2>&1 || true
+  cluster_delete "$cluster"
   rm -rf "$work"
   exit "$status"
 }
@@ -40,12 +40,12 @@ expect_fail() {
   step "rejected as expected: $what ($(tail -1 "$work/out"))"
 }
 
-step "create kind cluster $cluster"
-kind create cluster --name "$cluster" --wait 120s >/dev/null 2>&1
+step "create k3d cluster $cluster"
+cluster_create "$cluster" "$KUBECONFIG"
 
 step "build and load the image"
 docker build -q -t solas-apiserver:dev . >/dev/null
-kind load docker-image solas-apiserver:dev --name "$cluster" >/dev/null 2>&1
+image_import solas-apiserver:dev "$cluster"
 
 step "deploy dynamodb-local and the API server"
 kubectl apply -f deploy/apiserver/namespace.yaml >/dev/null

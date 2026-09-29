@@ -181,7 +181,7 @@ it is done.
 
 ### M0: Repository and tooling
 
-- `devbox.json` with Go, Node and Quint, a JDK for Apalache and TLC, kind,
+- `devbox.json` with Go, Node and Quint, a JDK for Apalache and TLC, k3d,
   kubectl, the AWS CLI, Rust for Duvet, and golangci-lint.
 - The resource caps from `CLAUDE.md`: `JVM_ARGS`, `JAVA_TOOL_OPTIONS`,
   `GOFLAGS=-p=4`, and four simulator shards.
@@ -241,7 +241,7 @@ Exit: `devbox run test` passes with the race detector.
 - Deployment manifests: `APIService`, RBAC, serving certificates, and the
   table endpoint and credentials.
 
-Exit: unit tests for the strategies pass. A single kind cluster serves
+Exit: unit tests for the strategies pass. A single k3d cluster serves
 `kubectl get devices`.
 
 ### M5: Controllers
@@ -268,8 +268,9 @@ Exit: `devbox run sim-gate` passes.
 
 ### M7: Three-cluster demo and end-to-end tests
 
-- `demo/kind/` scripts create three kind clusters and one dynamodb-local
-  container on the kind Docker network. They install both components in
+- `demo/k3d/` scripts create three k3d clusters and one dynamodb-local
+  container on a shared Docker network. Each cluster comes up on its own
+  and joins through the table. The scripts install both components in
   each cluster.
 - The demo shows four things. A device created in cluster A appears in B
   and C. Claims in B and C race for one device, and only one wins. Cluster
@@ -319,7 +320,7 @@ says. Two agents can work in parallel on code, but not on e2e or
 - dynamodb-local may differ from DynamoDB in transaction or TTL behavior. The
   conformance tests should run against real DynamoDB at least once before
   any claim about production use.
-- Three kind clusters and dynamodb-local use several gigabytes of memory. The
+- Three k3d clusters and dynamodb-local use about 1.5 GB of memory. The
   e2e lock and the one-heavy-job rule manage this.
 - Lease safety depends on a clock drift bound. The spec must state it,
   and the model must include drift.
