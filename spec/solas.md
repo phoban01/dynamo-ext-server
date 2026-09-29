@@ -286,9 +286,14 @@ Before it binds a claim, the controller MUST add the finalizer
 `solas.dev/release` to the claim.
 Before it picks a device, the controller MUST do a consistent list of
 devices.
-If a device in that list has a `claimRef` with the claim UID, the
-controller MUST adopt that device and MUST NOT bind another.
+If a device in that list has a `claimRef` with the claim UID and the UID
+of the member's current `Member`, the controller MUST adopt that device
+and MUST NOT bind another.
 This covers a crash after the device write and before the claim write.
+The controller MUST NOT adopt a device whose `claimRef` has an older
+member UID.
+A bind from an old member identity can land after a rejoin.
+The sweeper clears that `claimRef`, as section 8.3 describes.
 
 The controller MUST pick a device from the free devices that match the
 selector.
@@ -304,12 +309,16 @@ and MUST NOT retry with the old version.
 After a successful bind, the controller MUST set the claim phase to
 `Bound`.
 It MUST also set `status.deviceName` and `status.memberUID`.
+The controller MUST NOT set a claim to `Bound` from a bind that carried
+an older member UID.
 
 If more than one device has a `claimRef` with the same claim UID, the
-controller MUST keep the device with the lowest name.
+controller MUST keep the device in `status.deviceName`.
 It MUST release the other devices as section 6.4 describes.
-This can happen when an old leader's write lands after a new leader's
-list.
+The controller MUST NOT move a claim to another device while the claim
+is `Bound`, because a workload can be using the device.
+Two devices can name one claim when an old leader's write lands after a
+new leader's list.
 
 ### 6.4. Release
 
@@ -324,6 +333,12 @@ The controller MUST NOT change a device whose `claimRef` does not have
 the claim UID.
 After the release, the controller MUST remove the finalizer.
 
+A bind can land after the release has removed the finalizer.
+The controller MUST clear a `claimRef` that names its own member and a
+claim UID that does not exist in its cluster.
+The clear MUST be a status update with the resource version that the
+controller read.
+
 ### 6.5. Phases
 
 A new claim MUST start in phase `Pending`.
@@ -335,7 +350,16 @@ When the controller finds that its member UID changed, it MUST set each
 claim with the old `status.memberUID` to `Lost`.
 A `Lost` claim MUST NOT bind again.
 A user deletes a `Lost` claim to free its finalizer.
-Workloads SHOULD use a device only while its claim is `Bound`.
+
+A claim is in effect while it is `Bound`, it has no deletion timestamp,
+and its member is live by the member's own clock.
+Workloads MUST use a device only while its claim is in effect.
+The safety properties in section 8.4 are about claims in effect.
+
+The controller can set a claim to `Suspended` only some time after its
+lease ends.
+So the phase alone does not tell a workload that the claim is in effect.
+How a workload learns the end of the lease is an open question.
 
 ## 7. Membership
 
@@ -399,8 +423,10 @@ Solas depends only on the drift bound.
 
 To leave, the member MUST first set its phase to `Draining`.
 A draining member MUST NOT bind.
+The member MUST then set each `Bound` claim to `Suspended`.
 The member MUST then release each device that it holds, as section 6.4
 describes.
+The member MUST NOT release the device of a claim that is still `Bound`.
 The member MUST then delete its `Member`.
 
 ## 8. Reclaim

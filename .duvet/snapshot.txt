@@ -168,8 +168,11 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST]: `solas.dev/release` to the claim.
     TEXT[!MUST]: Before it picks a device, the controller MUST do a consistent list of
     TEXT[!MUST]: devices.
-    TEXT[!MUST]: If a device in that list has a `claimRef` with the claim UID, the
-    TEXT[!MUST]: controller MUST adopt that device and MUST NOT bind another.
+    TEXT[!MUST]: If a device in that list has a `claimRef` with the claim UID and the UID
+    TEXT[!MUST]: of the member's current `Member`, the controller MUST adopt that device
+    TEXT[!MUST]: and MUST NOT bind another.
+    TEXT[!MUST]: The controller MUST NOT adopt a device whose `claimRef` has an older
+    TEXT[!MUST]: member UID.
     TEXT[!MUST]: The controller MUST pick a device from the free devices that match the
     TEXT[!MUST]: selector.
     TEXT[!SHOULD]: The controller SHOULD pick at random among the matching devices.
@@ -181,9 +184,13 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST]: After a successful bind, the controller MUST set the claim phase to
     TEXT[!MUST]: `Bound`.
     TEXT[!MUST]: It MUST also set `status.deviceName` and `status.memberUID`.
+    TEXT[!MUST]: The controller MUST NOT set a claim to `Bound` from a bind that carried
+    TEXT[!MUST]: an older member UID.
     TEXT[!MUST]: If more than one device has a `claimRef` with the same claim UID, the
-    TEXT[!MUST]: controller MUST keep the device with the lowest name.
+    TEXT[!MUST]: controller MUST keep the device in `status.deviceName`.
     TEXT[!MUST]: It MUST release the other devices as section 6.4 describes.
+    TEXT[!MUST]: The controller MUST NOT move a claim to another device while the claim
+    TEXT[!MUST]: is `Bound`, because a workload can be using the device.
 
   SECTION: [6.4. Release](#6-4-release)
     TEXT[!MUST]: When a claim has a deletion timestamp, the controller MUST release its
@@ -196,6 +203,10 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST]: The controller MUST NOT change a device whose `claimRef` does not have
     TEXT[!MUST]: the claim UID.
     TEXT[!MUST]: After the release, the controller MUST remove the finalizer.
+    TEXT[!MUST]: The controller MUST clear a `claimRef` that names its own member and a
+    TEXT[!MUST]: claim UID that does not exist in its cluster.
+    TEXT[!MUST]: The clear MUST be a status update with the resource version that the
+    TEXT[!MUST]: controller read.
 
   SECTION: [6.5. Phases](#6-5-phases)
     TEXT[!MUST]: A new claim MUST start in phase `Pending`.
@@ -206,7 +217,7 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST]: When the controller finds that its member UID changed, it MUST set each
     TEXT[!MUST]: claim with the old `status.memberUID` to `Lost`.
     TEXT[!MUST]: A `Lost` claim MUST NOT bind again.
-    TEXT[!SHOULD]: Workloads SHOULD use a device only while its claim is `Bound`.
+    TEXT[!MUST]: Workloads MUST use a device only while its claim is in effect.
 
   SECTION: [7.1. Resource](#7-1-resource)
     TEXT[!MUST]: `Member` MUST be a cluster-scoped resource in the group `solas.dev`,
@@ -243,8 +254,10 @@ SPECIFICATION: [Solas specification](spec/solas.md)
   SECTION: [7.6. Leave](#7-6-leave)
     TEXT[!MUST]: To leave, the member MUST first set its phase to `Draining`.
     TEXT[!MUST]: A draining member MUST NOT bind.
+    TEXT[!MUST]: The member MUST then set each `Bound` claim to `Suspended`.
     TEXT[!MUST]: The member MUST then release each device that it holds, as section 6.4
     TEXT[!MUST]: describes.
+    TEXT[!MUST]: The member MUST NOT release the device of a claim that is still `Bound`.
     TEXT[!MUST]: The member MUST then delete its `Member`.
 
   SECTION: [8.1. Expiry on the observer](#8-1-expiry-on-the-observer)
