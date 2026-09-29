@@ -37,6 +37,10 @@ func ValidateDeviceStatusUpdate(d, old *solas.Device) field.ErrorList {
 
 	//= spec/solas.md#5-3-status-updates
 	//# A holder is different when any field of `claimRef` differs.
+
+	//= spec/solas.md#5-3-status-updates
+	//# To move a device, a client MUST first clear `claimRef` and then set it
+	//# in a second update.
 	if old.Status.ClaimRef != nil && d.Status.ClaimRef != nil && *old.Status.ClaimRef != *d.Status.ClaimRef {
 		errs = append(errs, field.Forbidden(path,
 			"cannot change the holder of a bound device; clear claimRef first, then set it"))
