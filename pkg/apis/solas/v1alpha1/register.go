@@ -1,0 +1,42 @@
+package v1alpha1
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+)
+
+// GroupName is the name of the API group, ADR 0006.
+const GroupName = "solas.dev"
+
+// SchemeGroupVersion is the version of this package.
+var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: "v1alpha1"}
+
+var (
+	// SchemeBuilder adds the v1alpha1 types to a scheme.
+	SchemeBuilder      runtime.SchemeBuilder
+	localSchemeBuilder = &SchemeBuilder
+	// AddToScheme adds the v1alpha1 types to a scheme.
+	AddToScheme = localSchemeBuilder.AddToScheme
+)
+
+func init() {
+	// Generated code registers the conversion and defaulting functions.
+	localSchemeBuilder.Register(addKnownTypes, addDefaultingFuncs)
+}
+
+func addKnownTypes(scheme *runtime.Scheme) error {
+	scheme.AddKnownTypes(SchemeGroupVersion,
+		&Device{},
+		&DeviceList{},
+		&Member{},
+		&MemberList{},
+	)
+	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
+	return nil
+}
+
+// Resource returns a group-qualified resource.
+func Resource(resource string) schema.GroupResource {
+	return SchemeGroupVersion.WithResource(resource).GroupResource()
+}
