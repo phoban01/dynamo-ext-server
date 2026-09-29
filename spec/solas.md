@@ -49,9 +49,11 @@ The table holds three kinds of item: object items, counter items, and
 event items.
 
 An object item MUST have `pk` equal to `obj#` followed by the resource.
-An object item MUST have `sk` equal to the namespace, a `/`, and the
-object name.
-For a cluster-scoped object, the namespace part of `sk` is empty.
+An object item MUST have `sk` equal to the part of its storage key after
+the resource name.
+The sort key starts with `/`, so it is never empty.
+For a namespaced object, `sk` is `/`, the namespace, `/`, and the name.
+For a cluster-scoped object, `sk` is `/` and the name.
 An object item MUST hold the resource version of its last write in the
 number attribute `rv`.
 An object item MUST hold the encoded object in the binary attribute
@@ -68,8 +70,9 @@ string, padded with zeros to 20 digits.
 The padding makes the string order of `sk` equal to the number order of
 the versions.
 An event item MUST hold the event type in the attribute `type`.
-The event type MUST be one of `ADDED`, `MODIFIED`, or `DELETED`.
-An event item MUST hold the encoded new object in `value`.
+The event type MUST be one of `INIT`, `ADDED`, `MODIFIED`, or `DELETED`.
+An `ADDED`, `MODIFIED`, or `DELETED` event item MUST hold the encoded
+object in `value`.
 An event item for a `MODIFIED` or `DELETED` event MUST hold the encoded
 previous object in `prev`.
 An event item MUST hold its expiry time, in Unix seconds, in `expires`.
@@ -82,8 +85,6 @@ an event put.
 
 The counter update MUST set `n` to `n + 1` on condition that `n` still
 has the value that the server read.
-If the counter item does not exist, the counter update MUST create it
-with `n` equal to 1, on condition that it still does not exist.
 
 For a create, the object action MUST be a put on condition that the
 object item does not exist.
@@ -104,9 +105,11 @@ The server SHOULD wait a short random time before each such retry.
 If the transaction fails on the object condition of a create, the server
 MUST return `409 AlreadyExists`.
 If the transaction fails on the object condition of an update or a
-delete, the server MUST return `409 Conflict`.
-The Kubernetes generic registry then retries an update on the new state
-where the request allows it.
+delete, the server MUST read the object again and retry.
+The retry runs the preconditions and the update function again, on the
+new state.
+When a request carries a resource version that no longer matches, the
+Kubernetes generic registry returns `409 Conflict`.
 
 The server MUST reject a write whose event item would exceed the
 DynamoDB item size limit.
@@ -138,7 +141,12 @@ by the watch cache, or it MUST fail with `410 Gone`.
 ### 3.1. Issue
 
 Each resource MUST have its own counter item.
-The first write to a resource MUST get resource version 1.
+Kubernetes does not accept 0 as the resource version of a list.
+So the counter of a resource never shows 0.
+When the server first uses a resource, it MUST create the counter item
+with `n` equal to 1 and an event item of type `INIT` at version 1, in one
+transaction.
+The first write to a resource MUST get resource version 2.
 Each write MUST get a resource version exactly one more than the
 previous write to the same resource.
 The write transaction in section 2.3 gives this, because the counter
@@ -183,6 +191,7 @@ A watch from version `r` MUST deliver every event with a version greater
 than `r`.
 A watch MUST deliver events in version order.
 A watch MUST NOT deliver the same event twice.
+A watch MUST NOT deliver an `INIT` event.
 
 Let `last` be the version of the last event that the watch delivered, or
 `r` before the first event.

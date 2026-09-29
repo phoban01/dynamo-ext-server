@@ -29,7 +29,7 @@ Each member cluster runs two things:
 2. `solas-controller`, a controller manager. It runs the claim controller,
    the membership heartbeat, and the reclaim sweeper.
 
-All clusters point at the same DynamoDB table. The demo uses one LocalStack
+All clusters point at the same DynamoDB table. The demo uses one dynamodb-local
 container for this table.
 
 ```
@@ -222,9 +222,9 @@ Exit: `scripts/quint-check.sh` passes, and `devbox run verify` calls it.
 
 - `pkg/storage/dynamo` with `Create`, `Get`, `GetList`, `GuaranteedUpdate`,
   `Delete`, `Watch`, and the other `storage.Interface` methods.
-- Table bootstrap code and a LocalStack test fixture.
+- Table bootstrap code and a dynamodb-local test fixture.
 - The `k8s.io/apiserver` storage conformance tests run against
-  LocalStack.
+  dynamodb-local.
 - Duvet citations on each MUST sentence in the storage, resource version,
   and watch sections.
 
@@ -268,7 +268,7 @@ Exit: `devbox run sim-gate` passes.
 
 ### M7: Three-cluster demo and end-to-end tests
 
-- `demo/kind/` scripts create three kind clusters and one LocalStack
+- `demo/kind/` scripts create three kind clusters and one dynamodb-local
   container on the kind Docker network. They install both components in
   each cluster.
 - The demo shows four things. A device created in cluster A appears in B
@@ -316,10 +316,10 @@ says. Two agents can work in parallel on code, but not on e2e or
   `k8s.io/apiserver` version and upgrade on purpose.
 - Watch polling adds latency and read cost. The watch cache hides most of
   it, and DynamoDB Streams is the fallback.
-- LocalStack may differ from DynamoDB in transaction or TTL behavior. The
+- dynamodb-local may differ from DynamoDB in transaction or TTL behavior. The
   conformance tests should run against real DynamoDB at least once before
   any claim about production use.
-- Three kind clusters and LocalStack use several gigabytes of memory. The
+- Three kind clusters and dynamodb-local use several gigabytes of memory. The
   e2e lock and the one-heavy-job rule manage this.
 - Lease safety depends on a clock drift bound. The spec must state it,
   and the model must include drift.
