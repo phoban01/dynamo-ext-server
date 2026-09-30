@@ -254,6 +254,9 @@ module solas {
       active(cl),
       cl.uid != 0,
       not(cl.renewInFlight),
+      // Before it renews, the member handles each preemption request on the
+      // devices it holds, spec 10.8. The old forced-clear design skipped this.
+      CFG.forceClear or requestsSeen(c),
       s' = {
         ...s,
         clusters: s.clusters.set(c, {
@@ -711,6 +714,14 @@ module solas {
 
   // ---- Preemption, spec 10 ----
 
+  // requestsSeen is true when no Bound claim of c holds a device with a
+  // request that c has not handled yet.
+  def requestsSeen(c: str): bool = CFG.devices.forall(d => {
+    val dv = s.devices.get(d)
+    isFree(dv.ref) or isFree(dv.preempt) or refMember(dv.ref) != c
+      or s.claims.get(refClaim(dv.ref)).phase != "Bound"
+  })
+
   pure def refPrio(ref: OptRef): int = match ref {
     | Held(r) => r.prio
     | Free => -1
@@ -1101,4 +1112,30 @@ module solas2 {
 
   // d2 is not preemptible. Spec 10.5.
   run notPreemptibleTest = allHeld.then(requestPreemption("b1", "d2").fail())
+
+  // A holder that has not handled a request on its device cannot renew,
+  // spec 10.8.
+  run stuckRenewTest = allHeld.then(requestPreemption("b1", "d1")).then(renewSend("a").fail())
+
+  // a never handles the request, so its lease lapses. b's sweeper deletes
+  // a's Member and frees d1, and b1 binds it. No claim in effect loses its
+  // device on the way.
+  run stuckHolderTest =
+    allHeld
+      .then(requestPreemption("b1", "d1"))
+      .then(observe("b", "a"))
+      .then(tickBy(fastB))
+      .then(tickBy(fastB))
+      .then(tickBy(fastB))
+      .then(sweepDelete("b", "a"))
+      .then(sweepListDevices("b"))
+      .then(sweepListMembers("b"))
+      .then(sweepClear("b", "d1"))
+      .expect(not(effective("a2")) and safety)
+      .then(renewSend("b"))
+      .then(renewLand("b"))
+      .then(bindSend("b1", "d1"))
+      .then(bindLand({ cluster: "b", claim: "b1", dev: "d1", rv: 4, muid: 2 }))
+      .then(adopt("b1", "d1"))
+      .expect(s.claims.get("b1").phase == "Bound" and s.claims.get("b1").token == 2 and safety)
 }

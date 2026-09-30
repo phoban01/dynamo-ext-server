@@ -670,13 +670,15 @@ The bind raises the fencing token, as every bind does, spec 5.3.
 
 ### 10.8. Holders that do not respond
 
-The preemptor MUST record the local time at which it wrote the request.
-If the device still names the holder after the grace period plus `D`
-from that time, by the preemptor's clock, the preemptor MAY clear the
-`claimRef` of the device.
-The clear MUST carry the resource version that the preemptor read.
-Fencing tokens keep device use safe, also when the holder did not see
-the request.
+The preemptor MUST NOT clear the `claimRef` of the holder.
+Before each renew, a member MUST handle each preemption request on the
+devices it holds, as section 10.6 describes.
+If it cannot, it MUST NOT renew.
+A holder that stops responding then loses its lease, and the sweeper
+frees its device, section 8.
+The device then stays kept for the preemptor, section 10.7.
+So no claim in effect loses its device, and a stuck holder delays a
+preemption by at most one lease duration `D`.
 
 ### 10.9. Stale requests
 

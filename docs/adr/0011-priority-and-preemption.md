@@ -1,6 +1,6 @@
 # ADR 0011: Device metadata, CEL selection, priority, and preemption
 
-Status: proposed
+Status: accepted
 
 ## Context
 
@@ -38,19 +38,20 @@ it is deleted, preempted, or lost.
      back to `Pending`.
   4. While a request stands, only the preemptor may bind the device. The
      bind clears the request and raises the fencing token.
-  5. If the holder does not release, the preemptor clears the holder's
-     `claimRef` after the grace period plus one lease duration D.
+  5. Before each renew, the holder handles each request on its devices.
+     If it cannot, it does not renew. A holder that stops responding
+     loses its lease, and the sweeper frees its device.
 
 ## Consequences
 
-- Fencing tokens keep device use safe in every case, also when step 5
-  cuts off a holder that did not respond.
+- No claim in effect loses its device. A stuck holder delays a
+  preemption by at most one lease duration D.
 - A claim in `Preempting` is still in effect. A claim in `Preempted` is
   not.
 - The server checks the priority rules, so a client cannot preempt with
   an equal or lower priority.
-- The Quint model gains priorities and the preemption steps, to check
-  the timing of step 5.
+- The Quint model gains priorities and the preemption steps.
+
 
 ## Rejected alternatives
 
@@ -58,3 +59,13 @@ it is deleted, preempted, or lost.
 - Immediate preemption. It cuts off running work with no warning.
 - A server-side clock for the grace period. solas does not trust clocks
   across clusters, so each side measures on its own clock.
+
+## Amendment
+
+The first version let a preemptor clear the holder's `claimRef` after the
+grace period plus D. The Quint model found that this takes a device from
+a live holder whose claim is still in effect, when the holder's
+controller has not handled the request. Fencing kept device use safe,
+but the claim lost its device with no warning. The negative model
+`quint/negative/force-clear.qnt` shows it. The holder now handles
+requests before each renew instead, and a stuck holder loses its lease.
