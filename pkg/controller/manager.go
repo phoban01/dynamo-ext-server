@@ -54,6 +54,8 @@ func Run(ctx context.Context, cfg *rest.Config, o *Options) error {
 	}
 	members.Drained = claims.Drained
 	members.MarkLost = claims.MarkLost
+	members.BeforeRenew = claims.HandlePreemptions
+	claims.Clock = clk
 	if err := claims.SetupWithManager(mgr); err != nil {
 		return err
 	}

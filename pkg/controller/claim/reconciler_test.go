@@ -105,7 +105,7 @@ func TestBindMatchingFreeDevice(t *testing.T) {
 	if len(got.Finalizers) != 1 || got.Finalizers[0] != claimsv1alpha1.ReleaseFinalizer {
 		t.Errorf("finalizers = %v", got.Finalizers)
 	}
-	if ref := getDevice(t, k, "gpu-1").Status.ClaimRef; ref == nil || *ref != *refTo(c1, muid) {
+	if ref := getDevice(t, k, "gpu-1").Status.ClaimRef; ref == nil || ref.UID != c1.UID || ref.MemberUID != muid || ref.BoundAt == nil {
 		t.Errorf("gpu-1 claimRef = %+v", ref)
 	}
 	if getDevice(t, k, "cpu-1").Status.ClaimRef != nil {

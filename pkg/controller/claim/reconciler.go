@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -38,6 +39,8 @@ type Reconciler struct {
 	Member    MemberState
 	// Resync is how often a claim is checked again, for example D / 3.
 	Resync time.Duration
+	// Clock measures the grace period of preemption. Nil means the wall clock.
+	Clock clock.PassiveClock
 	// Rand picks among free devices. Nil means a random seed. The simulator
 	// sets it so a run can be replayed.
 	Rand *rand.Rand
@@ -146,12 +149,12 @@ func (r *Reconciler) bind(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 	var free []*solasv1alpha1.Device
 	for i := range devices {
 		d := &devices[i]
-		if d.Status.ClaimRef == nil && d.DeletionTimestamp.IsZero() && sel.Matches(d) {
+		if d.Status.ClaimRef == nil && d.DeletionTimestamp.IsZero() && keptFor(d, claim) && sel.Matches(d) {
 			free = append(free, d)
 		}
 	}
 	if len(free) == 0 {
-		return reconcile.Result{RequeueAfter: r.Resync}, nil
+		return r.requestPreemption(ctx, claim, st, devices, sel)
 	}
 
 	//= spec/solas.md#6-3-bind
@@ -176,6 +179,8 @@ func (r *Reconciler) bind(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 		Namespace: claim.Namespace,
 		Name:      claim.Name,
 		UID:       claim.UID,
+		Priority:  claim.Spec.Priority,
+		BoundAt:   ptrTime(r.now()),
 	}
 	if err := r.Client.Status().Update(ctx, d); err != nil {
 		if apierrors.IsConflict(err) || apierrors.IsInvalid(err) {
@@ -257,6 +262,19 @@ func (r *Reconciler) held(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 	//# The controller SHOULD set `DeviceClaim.status.leaseExpiresAt` on each
 	//# `Bound` claim to the end of its member's lease, `S + D - M`, as a wall
 	//# time by the holder's clock.
+	//= spec/solas.md#10-9-stale-requests
+	//# The controller MUST clear a request that names its own member and a claim
+	//# that does not exist, as it does for a `claimRef`, spec 6.4.
+	//
+	// A held claim needs no preemption, so it withdraws its requests too.
+	if claim.Status.PreemptionTarget != "" {
+		if err := r.withdraw(ctx, claim, devices); err != nil {
+			return reconcile.Result{}, err
+		}
+		claim.Status.PreemptionTarget = ""
+		return reconcile.Result{Requeue: true}, ignoreConflict(r.Client.Status().Update(ctx, claim))
+	}
+
 	if st.Live && (claim.Status.Phase == claimsv1alpha1.ClaimBound || claim.Status.Phase == claimsv1alpha1.ClaimPreempting) {
 		if old := claim.Status.LeaseExpiresAt; old == nil || absDuration(old.Time.Sub(st.LeaseEnd)) >= time.Second {
 			end := metav1.NewTime(st.LeaseEnd)
@@ -268,7 +286,7 @@ func (r *Reconciler) held(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 	}
 
 	switch claim.Status.Phase {
-	case claimsv1alpha1.ClaimBound:
+	case claimsv1alpha1.ClaimBound, claimsv1alpha1.ClaimPreempting:
 		//= spec/solas.md#6-5-phases
 		//# When the controller's member is not live by its own clock, the
 		//# controller MUST set each `Bound` claim to `Suspended`.
@@ -277,8 +295,17 @@ func (r *Reconciler) held(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 		//# The member MUST then set each `Bound` claim to `Suspended`.
 		if !st.Live || st.Draining {
 			claim.Status.Phase = claimsv1alpha1.ClaimSuspended
+			claim.Status.PreemptionSeenAt = nil
 			return reconcile.Result{Requeue: true}, ignoreConflict(r.Client.Status().Update(ctx, claim))
 		}
+		if changed, err := r.preemptionStep(ctx, claim, own); changed || err != nil {
+			return reconcile.Result{Requeue: true}, err
+		}
+	case claimsv1alpha1.ClaimPreempted:
+		if _, err := r.preemptionStep(ctx, claim, own); err != nil {
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{Requeue: true}, nil
 	case claimsv1alpha1.ClaimSuspended:
 		if st.Draining && own != nil {
 			//= spec/solas.md#7-6-leave
@@ -325,6 +352,9 @@ func (r *Reconciler) release(ctx context.Context, claim *claimsv1alpha1.DeviceCl
 				return reconcile.Result{}, err
 			}
 		}
+	}
+	if err := r.withdraw(ctx, claim, devices); err != nil {
+		return reconcile.Result{}, err
 	}
 	//= spec/solas.md#6-4-release
 	//# After the release, the controller MUST remove the finalizer.
@@ -392,4 +422,9 @@ func absDuration(d time.Duration) time.Duration {
 		return -d
 	}
 	return d
+}
+
+func ptrTime(t time.Time) *metav1.Time {
+	mt := metav1.NewTime(t)
+	return &mt
 }

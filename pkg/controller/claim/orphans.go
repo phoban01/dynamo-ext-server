@@ -51,6 +51,27 @@ func (o *Orphans) Sweep(ctx context.Context) error {
 		return err
 	}
 	for i := range devices {
+		req := devices[i].Status.Preemption
+		if req == nil || req.Claim.Member != r.ClusterID {
+			continue
+		}
+		exists, err := o.claimExists(ctx, req.Claim.Namespace, req.Claim.Name, req.Claim.UID)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			d := devices[i].DeepCopy()
+			d.Status.Preemption = nil
+			if err := r.Client.Status().Update(ctx, d); err != nil && !apierrors.IsConflict(err) {
+				return client.IgnoreNotFound(err)
+			}
+			// The ref loop below lists again, so it sees the new version.
+			if devices, err = r.listDevices(ctx); err != nil {
+				return err
+			}
+		}
+	}
+	for i := range devices {
 		ref := devices[i].Status.ClaimRef
 		if ref == nil || ref.Member != r.ClusterID {
 			continue

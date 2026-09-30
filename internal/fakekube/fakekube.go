@@ -11,14 +11,17 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/validation/field"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	claimsv1alpha1 "github.com/phoban01/solas/pkg/apis/claims/v1alpha1"
+	"github.com/phoban01/solas/pkg/apis/solas"
 	solasv1alpha1 "github.com/phoban01/solas/pkg/apis/solas/v1alpha1"
+	"github.com/phoban01/solas/pkg/apiserver"
 	"github.com/phoban01/solas/pkg/controller/scheme"
+	"github.com/phoban01/solas/pkg/registry/solas/device"
 )
 
 // Options change how the fake client behaves.
@@ -63,7 +66,8 @@ func NewClientWithOptions(o Options, objs ...client.Object) client.WithWatch {
 		Build()
 }
 
-// deviceStatus applies the status strategy of solas-apiserver to d.
+// deviceStatus applies the real status strategy and validation of
+// solas-apiserver to d, so the fake follows the same rules as the server.
 func deviceStatus(ctx context.Context, c client.Client, d *solasv1alpha1.Device, unconditional bool) error {
 	var old solasv1alpha1.Device
 	if err := c.Get(ctx, client.ObjectKeyFromObject(d), &old); err != nil {
@@ -81,15 +85,19 @@ func deviceStatus(ctx context.Context, c client.Client, d *solasv1alpha1.Device,
 		return apierrors.NewConflict(schema.GroupResource{Group: "solas.dev", Resource: "devices"}, d.Name,
 			fmt.Errorf("resource version %s is not %s", d.ResourceVersion, old.ResourceVersion))
 	}
-	if o, n := old.Status.ClaimRef, d.Status.ClaimRef; o != nil && n != nil && *o != *n {
-		return apierrors.NewInvalid(schema.GroupKind{Group: "solas.dev", Kind: "Device"}, d.Name,
-			field.ErrorList{field.Forbidden(field.NewPath("status", "claimRef"), "cannot change the holder")})
+	var in, oldIn solas.Device
+	if err := apiserver.Scheme.Convert(d, &in, nil); err != nil {
+		return err
 	}
-	d.Status.FencingToken = old.Status.FencingToken
-	if old.Status.ClaimRef == nil && d.Status.ClaimRef != nil {
-		d.Status.FencingToken++
+	if err := apiserver.Scheme.Convert(&old, &oldIn, nil); err != nil {
+		return err
 	}
-	return nil
+	strategy := device.NewStatusStrategy(device.NewStrategy(apiserver.Scheme))
+	strategy.PrepareForUpdate(ctx, &in, &oldIn)
+	if errs := strategy.ValidateUpdate(ctx, &in, &oldIn); len(errs) > 0 {
+		return apierrors.NewInvalid(schema.GroupKind{Group: "solas.dev", Kind: "Device"}, d.Name, errs)
+	}
+	return apiserver.Scheme.Convert(&in, d, nil)
 }
 
 // NewUID returns a random UID.

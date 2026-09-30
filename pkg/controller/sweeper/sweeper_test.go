@@ -208,3 +208,28 @@ func TestClearStaleRefsListsDevicesFirst(t *testing.T) {
 		}
 	}
 }
+
+//= spec/solas.md#10-9-stale-requests
+//= type=test
+//# The sweeper MUST clear a request whose member UID is not in the member
+//# list, as it does for a `claimRef`, spec 8.3.
+
+func TestClearStaleRequests(t *testing.T) {
+	ctx := context.Background()
+	held := device("d1", ref("a", "ua"))
+	held.Spec.Preemptible = true
+	held.Status.Preemption = &solasv1alpha1.PreemptionRequest{Claim: *ref("b", "ub-gone")}
+	held.Status.Preemption.Claim.Priority = 5
+	c := fakekube.NewClient(member("a", "ua"), held)
+	s := newSweeper(c, clocktesting.NewFakePassiveClock(time.Unix(5000, 0)))
+	if err := s.clearStale(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var d solasv1alpha1.Device
+	if err := c.Get(ctx, client.ObjectKey{Name: "d1"}, &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.Status.Preemption != nil || d.Status.ClaimRef == nil {
+		t.Errorf("request %+v, holder %+v; want the request gone and the holder kept", d.Status.Preemption, d.Status.ClaimRef)
+	}
+}

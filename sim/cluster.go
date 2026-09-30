@@ -67,6 +67,8 @@ func (c *cluster) build() {
 	}
 	c.members.Drained = c.claims.Drained
 	c.members.MarkLost = c.claims.MarkLost
+	c.members.BeforeRenew = c.claims.HandlePreemptions
+	c.claims.Clock = c.clock
 	c.orphans = &claim.Orphans{Reconciler: c.claims}
 	c.sweeper = &sweeper.Sweeper{
 		Client: c.client, Reader: c.client, ClusterID: c.name,
