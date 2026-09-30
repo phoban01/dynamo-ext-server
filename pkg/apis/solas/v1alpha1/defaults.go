@@ -17,3 +17,17 @@ func SetDefaults_MemberSpec(obj *MemberSpec) {
 		obj.LeaseDurationSeconds = DefaultLeaseDurationSeconds
 	}
 }
+
+// DefaultPreemptionGracePeriodSeconds is the default grace period, spec 10.1.
+const DefaultPreemptionGracePeriodSeconds = 30
+
+//= spec/solas.md#10-1-device-metadata
+//# `Device.spec.preemptionGracePeriodSeconds` MUST be 30 unless it is set.
+
+// SetDefaults_DeviceSpec sets the grace period when it is not set.
+func SetDefaults_DeviceSpec(obj *DeviceSpec) {
+	if obj.PreemptionGracePeriodSeconds == nil {
+		g := int32(DefaultPreemptionGracePeriodSeconds)
+		obj.PreemptionGracePeriodSeconds = &g
+	}
+}

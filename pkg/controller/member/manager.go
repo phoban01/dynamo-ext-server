@@ -4,6 +4,7 @@ package member
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -27,6 +28,8 @@ type Status struct {
 	Draining bool
 	// Left is true after a graceful leave.
 	Left bool
+	// LeaseEnd is when the lease ends by this member's clock, S + D - M.
+	LeaseEnd time.Time
 }
 
 // Manager keeps the Member of this cluster.
@@ -49,6 +52,11 @@ type Manager struct {
 	// spec 7.2. If it fails, the manager stays not live and tries again.
 	MarkLost func(ctx context.Context, uid types.UID) error
 
+	// BeforeRenew handles the preemption requests on the devices of this
+	// member. The manager calls it before each renew and does not renew when
+	// it fails, spec 10.8.
+	BeforeRenew func(ctx context.Context, uid types.UID) error
+
 	mu       sync.Mutex
 	member   *solasv1alpha1.Member
 	sentAt   time.Time
@@ -69,6 +77,7 @@ func (m *Manager) Status() Status {
 		//# The member MUST treat itself as not live from local time `S + D - M`.
 		Live:     m.Clock.Since(m.sentAt) < m.Lease-m.Margin,
 		Draining: m.draining,
+		LeaseEnd: m.sentAt.Add(m.Lease - m.Margin),
 	}
 }
 
@@ -173,6 +182,17 @@ func (m *Manager) renew(ctx context.Context) error {
 	mem := m.member.DeepCopy()
 	m.mu.Unlock()
 
+	//= spec/solas.md#10-8-holders-that-do-not-respond
+	//# Before each renew, a member MUST handle each preemption request on the
+	//# devices it holds, as section 10.6 describes.
+
+	//= spec/solas.md#10-8-holders-that-do-not-respond
+	//# If it cannot, it MUST NOT renew.
+	if m.BeforeRenew != nil {
+		if err := m.BeforeRenew(ctx, mem.UID); err != nil {
+			return fmt.Errorf("handle preemption requests before the renew: %w", err)
+		}
+	}
 	send := m.Clock.Now()
 	mem.Status.RenewTime = ptrMicro(send)
 	err := m.Client.Status().Update(ctx, mem)

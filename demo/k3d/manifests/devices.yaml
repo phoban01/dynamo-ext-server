@@ -1,0 +1,79 @@
+# The device pool. Every cluster sees these devices, whichever cluster
+# creates them. The two A100s and the two T4s are preemptible.
+apiVersion: solas.dev/v1alpha1
+kind: Device
+metadata:
+  name: gpu-a100-1
+  labels: {kind: gpu, zone: eu-west-1a}
+spec:
+  description: training GPU
+  attributes: {vendor: nvidia, model: A100, memoryGiB: "80"}
+  preemptible: true
+  preemptionGracePeriodSeconds: 10
+---
+apiVersion: solas.dev/v1alpha1
+kind: Device
+metadata:
+  name: gpu-a100-2
+  labels: {kind: gpu, zone: eu-west-1b}
+spec:
+  description: training GPU
+  attributes: {vendor: nvidia, model: A100, memoryGiB: "80"}
+  preemptible: true
+  preemptionGracePeriodSeconds: 10
+---
+apiVersion: solas.dev/v1alpha1
+kind: Device
+metadata:
+  name: gpu-h100-1
+  labels: {kind: gpu, zone: eu-west-1a}
+spec:
+  description: the only H100; a gatekeeper checks its fencing tokens
+  attributes: {vendor: nvidia, model: H100, memoryGiB: "80"}
+---
+apiVersion: solas.dev/v1alpha1
+kind: Device
+metadata:
+  name: gpu-t4-1
+  labels: {kind: gpu, zone: eu-west-1a}
+spec:
+  description: inference GPU
+  attributes: {vendor: nvidia, model: T4, memoryGiB: "16"}
+  preemptible: true
+  preemptionGracePeriodSeconds: 10
+---
+apiVersion: solas.dev/v1alpha1
+kind: Device
+metadata:
+  name: gpu-t4-2
+  labels: {kind: gpu, zone: eu-west-1b}
+spec:
+  description: inference GPU
+  attributes: {vendor: nvidia, model: T4, memoryGiB: "16"}
+  preemptible: true
+  preemptionGracePeriodSeconds: 10
+---
+apiVersion: solas.dev/v1alpha1
+kind: Device
+metadata:
+  name: fpga-1
+  labels: {kind: fpga, zone: eu-west-1a}
+spec:
+  description: video encoder
+  attributes: {vendor: xilinx, model: U55C}
+---
+apiVersion: solas.dev/v1alpha1
+kind: Device
+metadata:
+  name: nic-1
+  labels: {kind: nic, zone: eu-west-1a}
+spec:
+  attributes: {vendor: mellanox, model: ConnectX-7, speed: 400G}
+---
+apiVersion: solas.dev/v1alpha1
+kind: Device
+metadata:
+  name: nic-2
+  labels: {kind: nic, zone: eu-west-1b}
+spec:
+  attributes: {vendor: mellanox, model: ConnectX-6, speed: 100G}

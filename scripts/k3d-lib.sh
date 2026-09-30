@@ -58,7 +58,9 @@ image_import() {
   for attempt in 1 2 3; do
     missing=()
     for image in "$@"; do
-      docker exec "$node" crictl images -q "docker.io/library/$image" 2>/dev/null | grep -q . ||
+      # crictl images -q <ref> lists every image when <ref> is missing, so
+      # check with inspecti, which fails.
+      docker exec "$node" crictl inspecti "docker.io/library/$image" >/dev/null 2>&1 ||
         missing+=("$image")
     done
     [ ${#missing[@]} -eq 0 ] && return 0

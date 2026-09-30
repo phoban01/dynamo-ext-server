@@ -145,6 +145,21 @@ func (s *Sweeper) clearStale(ctx context.Context) error {
 	for i := range members.Items {
 		live[members.Items[i].UID] = true
 	}
+	//= spec/solas.md#10-9-stale-requests
+	//# The sweeper MUST clear a request whose member UID is not in the member
+	//# list, as it does for a `claimRef`, spec 8.3.
+	for i := range devices.Items {
+		d := &devices.Items[i]
+		if req := d.Status.Preemption; req != nil && !live[req.Claim.MemberUID] {
+			cleared := d.DeepCopy()
+			cleared.Status.Preemption = nil
+			if err := s.Client.Status().Update(ctx, cleared); err == nil {
+				*d = *cleared
+			} else if !apierrors.IsConflict(err) && !apierrors.IsNotFound(err) {
+				return err
+			}
+		}
+	}
 	for i := range devices.Items {
 		d := &devices.Items[i]
 		ref := d.Status.ClaimRef

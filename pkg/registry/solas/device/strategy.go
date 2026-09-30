@@ -98,6 +98,12 @@ func (statusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obj
 	// Labels and annotations belong to the main resource.
 	d.Labels, d.Annotations = o.Labels, o.Annotations
 	d.Status.FencingToken = nextToken(o, d)
+	//= spec/solas.md#10-7-bind-by-the-preemptor
+	//# The bind of the requesting claim MUST clear `status.preemption`.
+	if req := o.Status.Preemption; req != nil && o.Status.ClaimRef == nil && d.Status.ClaimRef != nil &&
+		validation.SameIdentity(d.Status.ClaimRef, &req.Claim) {
+		d.Status.Preemption = nil
+	}
 }
 
 //= spec/solas.md#5-3-status-updates

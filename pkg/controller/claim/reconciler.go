@@ -9,9 +9,10 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -38,12 +39,15 @@ type Reconciler struct {
 	Member    MemberState
 	// Resync is how often a claim is checked again, for example D / 3.
 	Resync time.Duration
+	// Clock measures the grace period of preemption. Nil means the wall clock.
+	Clock clock.PassiveClock
 	// Rand picks among free devices. Nil means a random seed. The simulator
 	// sets it so a run can be replayed.
 	Rand *rand.Rand
 
-	mu   sync.Mutex
-	rand *rand.Rand
+	mu       sync.Mutex
+	programs programs
+	rand     *rand.Rand
 }
 
 var _ reconcile.Reconciler = &Reconciler{}
@@ -128,13 +132,16 @@ func (r *Reconciler) bind(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 	//# member UID.
 	for i := range devices {
 		if ref := devices[i].Status.ClaimRef; ref != nil && ref.UID == claim.UID && ref.MemberUID == st.UID {
-			return r.setBound(ctx, claim, &devices[i], st.UID)
+			return r.adopt(ctx, claim, devices[i].Name, st.UID)
 		}
 	}
 
-	sel, err := selector(claim)
+	sel, err := r.newMatcher(claim)
 	if err != nil {
-		return reconcile.Result{}, reconcile.TerminalError(err)
+		//= spec/solas.md#10-3-selection
+		//# If the expression does not compile, the controller MUST NOT bind the
+		//# claim and MUST set the condition `SelectorValid` to `False`.
+		return reconcile.Result{}, r.setCondition(ctx, claim, "SelectorValid", metav1.ConditionFalse, "Invalid", err.Error())
 	}
 	//= spec/solas.md#6-3-bind
 	//# The controller MUST pick a device from the free devices that match the
@@ -142,12 +149,12 @@ func (r *Reconciler) bind(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 	var free []*solasv1alpha1.Device
 	for i := range devices {
 		d := &devices[i]
-		if d.Status.ClaimRef == nil && d.DeletionTimestamp.IsZero() && sel.Matches(labels.Set(d.Labels)) {
+		if d.Status.ClaimRef == nil && d.DeletionTimestamp.IsZero() && keptFor(d, claim) && sel.Matches(d) {
 			free = append(free, d)
 		}
 	}
 	if len(free) == 0 {
-		return reconcile.Result{RequeueAfter: r.Resync}, nil
+		return r.requestPreemption(ctx, claim, st, devices, sel)
 	}
 
 	//= spec/solas.md#6-3-bind
@@ -172,6 +179,8 @@ func (r *Reconciler) bind(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 		Namespace: claim.Namespace,
 		Name:      claim.Name,
 		UID:       claim.UID,
+		Priority:  claim.Spec.Priority,
+		BoundAt:   ptrTime(r.now()),
 	}
 	if err := r.Client.Status().Update(ctx, d); err != nil {
 		if apierrors.IsConflict(err) || apierrors.IsInvalid(err) {
@@ -190,6 +199,29 @@ func (r *Reconciler) bind(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 	//
 	// The bind above carried st.UID, and setBound records the same UID.
 	return r.setBound(ctx, claim, d, st.UID)
+}
+
+//= spec/solas.md#6-3-bind
+//# Before it adopts a device, the controller MUST read the device again with
+//# a consistent read.
+
+//= spec/solas.md#6-3-bind
+//# It MUST adopt the device only if that read still shows the same `claimRef`.
+
+// adopt sets the claim Bound on a device that a list showed naming it. The
+// list can be late, so adopt reads the device again first.
+func (r *Reconciler) adopt(ctx context.Context, claim *claimsv1alpha1.DeviceClaim, name string, uid types.UID) (reconcile.Result, error) {
+	var d solasv1alpha1.Device
+	if err := r.Reader.Get(ctx, client.ObjectKey{Name: name}, &d); err != nil {
+		if apierrors.IsNotFound(err) {
+			return reconcile.Result{Requeue: true}, nil
+		}
+		return reconcile.Result{}, err
+	}
+	if ref := d.Status.ClaimRef; ref == nil || ref.UID != claim.UID || ref.MemberUID != uid {
+		return reconcile.Result{Requeue: true}, nil
+	}
+	return r.setBound(ctx, claim, &d, uid)
 }
 
 func (r *Reconciler) setBound(ctx context.Context, claim *claimsv1alpha1.DeviceClaim, d *solasv1alpha1.Device, uid types.UID) (reconcile.Result, error) {
@@ -219,7 +251,7 @@ func (r *Reconciler) held(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 		//= spec/solas.md#6-5-phases
 		//# When the controller finds that its member UID changed, it MUST set each
 		//# claim with the old `status.memberUID` to `Lost`.
-		claim.Status.Phase = claimsv1alpha1.ClaimLost
+		setPhase(claim, claimsv1alpha1.ClaimLost)
 		return reconcile.Result{}, ignoreConflict(r.Client.Status().Update(ctx, claim))
 	}
 
@@ -249,8 +281,35 @@ func (r *Reconciler) held(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 		}
 	}
 
+	//= spec/solas.md#10-4-lease-display
+	//# The controller SHOULD set `DeviceClaim.status.leaseExpiresAt` on each
+	//# `Bound` claim to the end of its member's lease, `S + D - M`, as a wall
+	//# time by the holder's clock.
+	//= spec/solas.md#10-9-stale-requests
+	//# The controller MUST clear a request that names its own member and a claim
+	//# that does not exist, as it does for a `claimRef`, spec 6.4.
+	//
+	// A held claim needs no preemption, so it withdraws its requests too.
+	if claim.Status.PreemptionTarget != "" {
+		if err := r.withdraw(ctx, claim, devices); err != nil {
+			return reconcile.Result{}, err
+		}
+		claim.Status.PreemptionTarget = ""
+		return reconcile.Result{Requeue: true}, ignoreConflict(r.Client.Status().Update(ctx, claim))
+	}
+
+	if st.Live && (claim.Status.Phase == claimsv1alpha1.ClaimBound || claim.Status.Phase == claimsv1alpha1.ClaimPreempting) {
+		if old := claim.Status.LeaseExpiresAt; old == nil || absDuration(old.Time.Sub(st.LeaseEnd)) >= time.Second {
+			end := metav1.NewTime(st.LeaseEnd)
+			claim.Status.LeaseExpiresAt = &end
+			if err := r.Client.Status().Update(ctx, claim); err != nil {
+				return reconcile.Result{}, ignoreConflict(err)
+			}
+		}
+	}
+
 	switch claim.Status.Phase {
-	case claimsv1alpha1.ClaimBound:
+	case claimsv1alpha1.ClaimBound, claimsv1alpha1.ClaimPreempting:
 		//= spec/solas.md#6-5-phases
 		//# When the controller's member is not live by its own clock, the
 		//# controller MUST set each `Bound` claim to `Suspended`.
@@ -258,9 +317,18 @@ func (r *Reconciler) held(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 		//= spec/solas.md#7-6-leave
 		//# The member MUST then set each `Bound` claim to `Suspended`.
 		if !st.Live || st.Draining {
-			claim.Status.Phase = claimsv1alpha1.ClaimSuspended
+			setPhase(claim, claimsv1alpha1.ClaimSuspended)
+			claim.Status.PreemptionSeenAt = nil
 			return reconcile.Result{Requeue: true}, ignoreConflict(r.Client.Status().Update(ctx, claim))
 		}
+		if changed, err := r.preemptionStep(ctx, claim, own); changed || err != nil {
+			return reconcile.Result{Requeue: true}, err
+		}
+	case claimsv1alpha1.ClaimPreempted:
+		if _, err := r.preemptionStep(ctx, claim, own); err != nil {
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{Requeue: true}, nil
 	case claimsv1alpha1.ClaimSuspended:
 		if st.Draining && own != nil {
 			//= spec/solas.md#7-6-leave
@@ -308,6 +376,9 @@ func (r *Reconciler) release(ctx context.Context, claim *claimsv1alpha1.DeviceCl
 			}
 		}
 	}
+	if err := r.withdraw(ctx, claim, devices); err != nil {
+		return reconcile.Result{}, err
+	}
 	//= spec/solas.md#6-4-release
 	//# After the release, the controller MUST remove the finalizer.
 	controllerutil.RemoveFinalizer(claim, claimsv1alpha1.ReleaseFinalizer)
@@ -351,16 +422,42 @@ func (r *Reconciler) intN(n int) int {
 	return r.rand.IntN(n)
 }
 
-func selector(claim *claimsv1alpha1.DeviceClaim) (labels.Selector, error) {
-	if claim.Spec.Selector == nil {
-		return labels.Everything(), nil
-	}
-	return metav1.LabelSelectorAsSelector(claim.Spec.Selector)
-}
-
 func ignoreConflict(err error) error {
 	if apierrors.IsConflict(err) {
 		return nil
 	}
 	return err
+}
+
+// setCondition sets one condition of the claim and saves the status.
+func (r *Reconciler) setCondition(ctx context.Context, claim *claimsv1alpha1.DeviceClaim,
+	typ string, status metav1.ConditionStatus, reason, msg string) error {
+	if !meta.SetStatusCondition(&claim.Status.Conditions, metav1.Condition{
+		Type: typ, Status: status, Reason: reason, Message: msg, ObservedGeneration: claim.Generation,
+	}) {
+		return nil
+	}
+	return ignoreConflict(r.Client.Status().Update(ctx, claim))
+}
+
+func absDuration(d time.Duration) time.Duration {
+	if d < 0 {
+		return -d
+	}
+	return d
+}
+
+func ptrTime(t time.Time) *metav1.Time {
+	mt := metav1.NewTime(t)
+	return &mt
+}
+
+//= spec/solas.md#10-4-lease-display
+//# The controller SHOULD clear it when the claim becomes `Pending`,
+//# `Suspended`, or `Lost`.
+
+// setPhase sets the phase of a claim that leaves Bound or Preempting.
+func setPhase(claim *claimsv1alpha1.DeviceClaim, p claimsv1alpha1.ClaimPhase) {
+	claim.Status.Phase = p
+	claim.Status.LeaseExpiresAt = nil
 }

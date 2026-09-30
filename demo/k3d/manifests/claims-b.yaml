@@ -1,0 +1,27 @@
+# The claims of cluster b.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: work
+---
+apiVersion: claims.solas.dev/v1alpha1
+kind: DeviceClaim
+metadata:
+  name: render
+  namespace: work
+spec:
+  priority: 2
+  selector:
+    cel: >-
+      device.spec.attributes.model == 'A100' &&
+      device.status.conditions.exists(c, c.type == 'Ready' && c.status == 'True')
+---
+apiVersion: claims.solas.dev/v1alpha1
+kind: DeviceClaim
+metadata:
+  name: encode
+  namespace: work
+spec:
+  priority: 0
+  selector:
+    matchLabels: {kind: fpga}

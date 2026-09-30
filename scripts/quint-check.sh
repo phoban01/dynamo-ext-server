@@ -61,6 +61,10 @@ pass "negative adopt-any-uid" quint test quint/negative/adopt-any-uid.qnt \
 # The test passes when its scenario breaks usesInOrder.
 pass "negative no-token-check" quint test quint/negative/no-token-check.qnt \
   --main no_token_check
+# The test passes when the forced clear of spec 10.8 breaks
+# claimMatchesDevice.
+pass "negative force-clear" quint test quint/negative/force-clear.qnt \
+  --main force_clear
 
 pass "run solas2 safety" run quint/solas.qnt --main solas2 --invariant safety
 # Fencing does not depend on the lease margin: it holds even when M = 0.

@@ -57,7 +57,10 @@ type World struct {
 	bindings map[string]map[int64]string
 	trace    []string
 	claimSeq int
-	step     int
+	// sawPreempted is true once a claim went through Preempted, for the
+	// witness test.
+	sawPreempted bool
+	step         int
 }
 
 // gate is a device gatekeeper, spec 6.6.
@@ -83,7 +86,13 @@ func NewWorld(ctx context.Context, seed uint64, cfg Config) (*World, error) {
 	}
 	for i := range cfg.Devices {
 		name := fmt.Sprintf("d%d", i+1)
-		if err := w.shared.Create(ctx, &solasv1alpha1.Device{ObjectMeta: metav1.ObjectMeta{Name: name}}); err != nil {
+		dev := &solasv1alpha1.Device{ObjectMeta: metav1.ObjectMeta{Name: name}}
+		// The first device is preemptible with a short grace period.
+		if i == 0 {
+			grace := int32(10)
+			dev.Spec.Preemptible, dev.Spec.PreemptionGracePeriodSeconds = true, &grace
+		}
+		if err := w.shared.Create(ctx, dev); err != nil {
 			return nil, err
 		}
 		w.gates[name] = &gate{}
@@ -186,6 +195,7 @@ func (w *World) createClaim(ctx context.Context, c *cluster) {
 	w.claimSeq++
 	name := fmt.Sprintf("job%d", w.claimSeq)
 	claim := &claimsv1alpha1.DeviceClaim{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: name}}
+	claim.Spec.Priority = int32(w.rng.IntN(4))
 	w.log("%s create claim %s: %s", c.name, name, errText(c.client.Create(ctx, claim)))
 }
 
@@ -208,7 +218,7 @@ func (w *World) workload(ctx context.Context, c *cluster) {
 	}
 	var claim claimsv1alpha1.DeviceClaim
 	if err := c.client.Get(ctx, keys[w.rng.IntN(len(keys))], &claim); err != nil ||
-		claim.Status.Phase != claimsv1alpha1.ClaimBound {
+		(claim.Status.Phase != claimsv1alpha1.ClaimBound && claim.Status.Phase != claimsv1alpha1.ClaimPreempting) {
 		return
 	}
 	g := w.gates[claim.Status.DeviceName]

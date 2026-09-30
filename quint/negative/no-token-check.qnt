@@ -15,6 +15,11 @@ module no_token_check {
     membersFirst: false,
     adoptAnyUid: false,
     noTokenCheck: true,
+    priority: Map("a1" -> 1, "a2" -> 0, "b1" -> 2),
+    preemptible: Map("d1" -> true, "d2" -> false),
+    grace: 20,
+    forceClear: false,
+    noPreemptionWait: false,
   }).* from "../solas"
 
   pure val fastB = Map("a" -> 0, "b" -> 1)

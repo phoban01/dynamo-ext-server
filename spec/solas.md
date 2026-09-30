@@ -310,6 +310,11 @@ If a device in that list has a `claimRef` with the claim UID and the UID
 of the member's current `Member`, the controller MUST adopt that device
 and MUST NOT bind another.
 This covers a crash after the device write and before the claim write.
+Before it adopts a device, the controller MUST read the device again with
+a consistent read.
+It MUST adopt the device only if that read still shows the same `claimRef`.
+A list can be older than the last release of the claim, spec 10.6, and
+adopt makes no write that the server can reject.
 The controller MUST NOT adopt a device whose `claimRef` has an older
 member UID.
 A bind from an old member identity can land after a rejoin.
@@ -433,6 +438,8 @@ After a join, the controller MUST set each claim with another
 `status.memberUID` to `Lost` before it treats itself as live.
 Otherwise a claim can look `Bound` for a moment under a member that has
 lost its device.
+This MUST include `Preempting` and `Preempted` claims, because they still
+hold a device.
 
 ### 7.3. Renew
 
@@ -595,3 +602,98 @@ On a dry-run request, the webhook MUST NOT write the Device.
 On a delete, the webhook MUST delete the Device.
 If solas rejects the delete of the Device, the webhook MUST deny the
 delete of the old object.
+
+## 10. Priority and preemption
+
+### 10.1. Device metadata
+
+`Device.spec.attributes` holds free-form metadata as string pairs.
+`Device.status.conditions` holds the health of the device.
+The party that runs the device sets the conditions.
+The server MUST keep the other rules of section 5.3 when a status update
+changes the conditions.
+`Device.spec.preemptible` MUST be false unless it is set.
+`Device.spec.preemptionGracePeriodSeconds` MUST be 30 unless it is set.
+
+### 10.2. Holder
+
+A `claimRef` MUST also hold the priority of the claim.
+A `claimRef` MAY hold the time of the bind, by the clock of the binder.
+The server MUST NOT use that time for any decision.
+
+### 10.3. Selection
+
+`DeviceClaim.spec.priority` is a number, and 0 unless it is set.
+A higher number is more urgent.
+`DeviceClaim.spec.selector.cel` MAY hold a CEL expression over the
+variable `device`.
+A device matches a claim only when the label selector and the CEL
+expression both match it.
+If the expression does not compile, the controller MUST NOT bind the
+claim and MUST set the condition `SelectorValid` to `False`.
+A CRD cannot check that a string is valid CEL.
+If the expression fails at run time for a device, that device MUST NOT
+match.
+
+### 10.4. Lease display
+
+The controller SHOULD set `DeviceClaim.status.leaseExpiresAt` on each
+`Bound` claim to the end of its member's lease, `S + D - M`, as a wall
+time by the holder's clock.
+The controller SHOULD clear it when the claim becomes `Pending`,
+`Suspended`, or `Lost`.
+No component MUST use `leaseExpiresAt` for any decision.
+
+### 10.5. Preemption request
+
+A `Pending` claim MAY request preemption of a device only when:
+the device matches the claim, the device is preemptible, the device is
+bound, and the holder has a lower priority than the claim.
+A request MUST be a status update of the device that sets
+`status.preemption`.
+The request MUST name the requesting claim as a `claimRef` does, with its
+priority.
+The request MUST carry the resource version that the controller read.
+The server MUST reject a request whose priority is not greater than the
+priority of the holder.
+The server MUST reject a request that replaces a request of equal or
+greater priority.
+
+### 10.6. Release by the holder
+
+When the holder's controller sees a request on its device, it MUST set
+its claim to `Preempting`.
+A `Preempting` claim is in effect, as a `Bound` claim is.
+The controller MUST record the local time at which it first saw the
+request.
+When the grace period has passed since that time, by the holder's clock,
+the controller MUST set its claim to `Preempted`.
+After the claim is `Preempted`, the controller MUST clear the `claimRef`
+of the device with a status update, and keep the request.
+The controller MUST then set the claim back to `Pending`.
+
+### 10.7. Bind by the preemptor
+
+While a device has a request, the server MUST reject a bind that does not
+name the requesting claim.
+The bind of the requesting claim MUST clear `status.preemption`.
+The bind raises the fencing token, as every bind does, spec 5.3.
+
+### 10.8. Holders that do not respond
+
+The preemptor MUST NOT clear the `claimRef` of the holder.
+Before each renew, a member MUST handle each preemption request on the
+devices it holds, as section 10.6 describes.
+If it cannot, it MUST NOT renew.
+A holder that stops responding then loses its lease, and the sweeper
+frees its device, section 8.
+The device then stays kept for the preemptor, section 10.7.
+So no claim in effect loses its device, and a stuck holder delays a
+preemption by at most one lease duration `D`.
+
+### 10.9. Stale requests
+
+The sweeper MUST clear a request whose member UID is not in the member
+list, as it does for a `claimRef`, spec 8.3.
+The controller MUST clear a request that names its own member and a claim
+that does not exist, as it does for a `claimRef`, spec 6.4.

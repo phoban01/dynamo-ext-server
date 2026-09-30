@@ -51,6 +51,27 @@ func (o *Orphans) Sweep(ctx context.Context) error {
 		return err
 	}
 	for i := range devices {
+		req := devices[i].Status.Preemption
+		if req == nil || req.Claim.Member != r.ClusterID {
+			continue
+		}
+		exists, err := o.claimExists(ctx, req.Claim.Namespace, req.Claim.Name, req.Claim.UID)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			d := devices[i].DeepCopy()
+			d.Status.Preemption = nil
+			if err := r.Client.Status().Update(ctx, d); err != nil && !apierrors.IsConflict(err) {
+				return client.IgnoreNotFound(err)
+			}
+			// The ref loop below lists again, so it sees the new version.
+			if devices, err = r.listDevices(ctx); err != nil {
+				return err
+			}
+		}
+	}
+	for i := range devices {
 		ref := devices[i].Status.ClaimRef
 		if ref == nil || ref.Member != r.ClusterID {
 			continue
@@ -100,9 +121,13 @@ func (r *Reconciler) Drained(ctx context.Context, uid types.UID) (bool, error) {
 	return true, nil
 }
 
-// MarkLost sets each Bound or Suspended claim of this cluster whose member
-// UID is not uid to Lost. The member manager calls it after a join, before
-// it counts itself live, spec 7.2.
+//= spec/solas.md#7-2-join
+//# This MUST include `Preempting` and `Preempted` claims, because they still
+//# hold a device.
+
+// MarkLost sets each claim of this cluster that holds a device under a
+// member UID other than uid to Lost. The member manager calls it after a
+// join, before it counts itself live, spec 7.2.
 func (r *Reconciler) MarkLost(ctx context.Context, uid types.UID) error {
 	var claims claimsv1alpha1.DeviceClaimList
 	if err := r.Client.List(ctx, &claims); err != nil {
@@ -110,11 +135,16 @@ func (r *Reconciler) MarkLost(ctx context.Context, uid types.UID) error {
 	}
 	for i := range claims.Items {
 		c := &claims.Items[i]
-		held := c.Status.Phase == claimsv1alpha1.ClaimBound || c.Status.Phase == claimsv1alpha1.ClaimSuspended
+		var held bool
+		switch c.Status.Phase {
+		case claimsv1alpha1.ClaimBound, claimsv1alpha1.ClaimSuspended,
+			claimsv1alpha1.ClaimPreempting, claimsv1alpha1.ClaimPreempted:
+			held = true
+		}
 		if !held || c.Status.MemberUID == uid {
 			continue
 		}
-		c.Status.Phase = claimsv1alpha1.ClaimLost
+		setPhase(c, claimsv1alpha1.ClaimLost)
 		if err := r.Client.Status().Update(ctx, c); err != nil {
 			return err
 		}

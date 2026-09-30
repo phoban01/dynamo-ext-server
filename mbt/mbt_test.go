@@ -110,4 +110,31 @@ func TestMBTCatchesADivergence(t *testing.T) {
 			t.Logf("caught: %v", err)
 		}
 	})
+
+	t.Run("missing preemption request", func(t *testing.T) {
+		tr, err := Load("testdata/preempt.itf.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		i := 0
+		for j, s := range tr.Steps {
+			if s.Action == "requestPreemption" && s.State.Devices[s.Pick("d")].Requested {
+				i = j
+				break
+			}
+		}
+		if i == 0 {
+			t.Fatal("the trace has no applied preemption request")
+		}
+		// Say that the model did not record the request.
+		dev := tr.Steps[i].Pick("d")
+		d := tr.Steps[i].State.Devices[dev]
+		d.Requested = false
+		tr.Steps[i].State.Devices[dev] = d
+		if err := newDriver(t).Replay(tr); err == nil {
+			t.Fatal("the replay did not see a missing preemption request")
+		} else {
+			t.Logf("caught: %v", err)
+		}
+	})
 }

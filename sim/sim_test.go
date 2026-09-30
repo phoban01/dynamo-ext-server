@@ -112,3 +112,23 @@ func TestSimDeterministic(t *testing.T) {
 		t.Fatal("runs differ in length")
 	}
 }
+
+// TestSimReachesPreemption is a witness: some seed must take a device from
+// a holder through the grace period, or the gate would not test it.
+func TestSimReachesPreemption(t *testing.T) {
+	ctx := context.Background()
+	for seed := uint64(1); seed <= 100; seed++ {
+		w, err := NewWorld(ctx, seed, DefaultConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := w.Run(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if w.sawPreempted {
+			t.Logf("seed %d preempted a claim", seed)
+			return
+		}
+	}
+	t.Fatal("no seed preempted a claim")
+}

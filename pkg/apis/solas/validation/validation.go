@@ -2,6 +2,8 @@
 package validation
 
 import (
+	"fmt"
+
 	genericvalidation "k8s.io/apimachinery/pkg/api/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
@@ -41,11 +43,11 @@ func ValidateDeviceStatusUpdate(d, old *solas.Device) field.ErrorList {
 	//= spec/solas.md#5-3-status-updates
 	//# To move a device, a client MUST first clear `claimRef` and then set it
 	//# in a second update.
-	if old.Status.ClaimRef != nil && d.Status.ClaimRef != nil && *old.Status.ClaimRef != *d.Status.ClaimRef {
+	if old.Status.ClaimRef != nil && d.Status.ClaimRef != nil && !SameClaim(old.Status.ClaimRef, d.Status.ClaimRef) {
 		errs = append(errs, field.Forbidden(path,
 			"cannot change the holder of a bound device; clear claimRef first, then set it"))
 	}
-	return errs
+	return append(errs, validatePreemption(d, old)...)
 }
 
 //= spec/solas.md#5-3-status-updates
@@ -107,4 +109,53 @@ func validateMemberStatus(m *solas.Member) field.ErrorList {
 	}
 	return field.ErrorList{field.NotSupported(statusPath.Child("phase"), m.Status.Phase,
 		[]string{string(solas.MemberActive), string(solas.MemberDraining)})}
+}
+
+// SameClaim reports whether two refs name the same claim at the same
+// priority. The bind time is for display and does not count.
+func SameClaim(a, b *solas.ClaimRef) bool {
+	return a.Member == b.Member && a.MemberUID == b.MemberUID && a.Namespace == b.Namespace &&
+		a.Name == b.Name && a.UID == b.UID && a.Priority == b.Priority
+}
+
+// validatePreemption checks the preemption rules of spec 10.5 and 10.7.
+func validatePreemption(d, old *solas.Device) field.ErrorList {
+	path := statusPath.Child("preemption")
+	var errs field.ErrorList
+	req, oldReq := d.Status.Preemption, old.Status.Preemption
+	if req != nil && (oldReq == nil || !SameClaim(&req.Claim, &oldReq.Claim)) {
+		errs = append(errs, validateClaimRef(&req.Claim, path.Child("claim"))...)
+		switch {
+		case !d.Spec.Preemptible:
+			errs = append(errs, field.Forbidden(path, "the device is not preemptible"))
+		case old.Status.ClaimRef == nil:
+			errs = append(errs, field.Forbidden(path, "the device is free; bind it instead"))
+		//= spec/solas.md#10-5-preemption-request
+		//# The server MUST reject a request whose priority is not greater than the
+		//# priority of the holder.
+		case req.Claim.Priority <= old.Status.ClaimRef.Priority:
+			errs = append(errs, field.Forbidden(path.Child("claim", "priority"),
+				fmt.Sprintf("must be greater than the priority %d of the holder", old.Status.ClaimRef.Priority)))
+		//= spec/solas.md#10-5-preemption-request
+		//# The server MUST reject a request that replaces a request of equal or
+		//# greater priority.
+		case oldReq != nil && req.Claim.Priority <= oldReq.Claim.Priority:
+			errs = append(errs, field.Forbidden(path.Child("claim", "priority"),
+				fmt.Sprintf("must be greater than the priority %d of the current request", oldReq.Claim.Priority)))
+		}
+	}
+	//= spec/solas.md#10-7-bind-by-the-preemptor
+	//# While a device has a request, the server MUST reject a bind that does not
+	//# name the requesting claim.
+	if oldReq != nil && old.Status.ClaimRef == nil && d.Status.ClaimRef != nil && !SameIdentity(d.Status.ClaimRef, &oldReq.Claim) {
+		errs = append(errs, field.Forbidden(statusPath.Child("claimRef"),
+			fmt.Sprintf("the device is kept for claim %s/%s of member %s", oldReq.Claim.Namespace, oldReq.Claim.Name, oldReq.Claim.Member)))
+	}
+	return errs
+}
+
+// SameIdentity reports whether two refs name the same claim.
+func SameIdentity(a, b *solas.ClaimRef) bool {
+	return a.Member == b.Member && a.MemberUID == b.MemberUID && a.Namespace == b.Namespace &&
+		a.Name == b.Name && a.UID == b.UID
 }

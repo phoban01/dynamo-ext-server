@@ -10,7 +10,7 @@ for name in a b; do
   docker unpause "k3d-e2e-$name-server-0" >/dev/null 2>&1 || true
   cluster_delete "e2e-$name"
 done
-docker rm -f solas-device-gpu-1 >/dev/null 2>&1 || true
+docker rm -f solas-device-gpu-1 solas-device-gpu-h100-1 >/dev/null 2>&1 || true
 demo/k3d/mesh.sh down
 rm -rf demo/k3d/.kube
 echo "demo removed"

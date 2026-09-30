@@ -179,6 +179,9 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: If a device in that list has a `claimRef` with the claim UID and the UID
     TEXT[!MUST,implementation]: of the member's current `Member`, the controller MUST adopt that device
     TEXT[!MUST,implementation]: and MUST NOT bind another.
+    TEXT[!MUST,implementation]: Before it adopts a device, the controller MUST read the device again with
+    TEXT[!MUST,implementation]: a consistent read.
+    TEXT[!MUST,implementation,test]: It MUST adopt the device only if that read still shows the same `claimRef`.
     TEXT[!MUST,implementation,test]: The controller MUST NOT adopt a device whose `claimRef` has an older
     TEXT[!MUST,implementation,test]: member UID.
     TEXT[!MUST,implementation]: The controller MUST pick a device from the free devices that match the
@@ -256,6 +259,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: If the `Member` does not exist, the controller MUST create a new one.
     TEXT[!MUST,implementation,test]: After a join, the controller MUST set each claim with another
     TEXT[!MUST,implementation,test]: `status.memberUID` to `Lost` before it treats itself as live.
+    TEXT[!MUST,implementation,test]: This MUST include `Preempting` and `Preempted` claims, because they still
+    TEXT[!MUST,implementation,test]: hold a device.
 
   SECTION: [7.3. Renew](#7-3-renew)
     TEXT[!MUST,implementation]: A renew MUST be an update of `Member.status.renewTime`.
@@ -353,3 +358,74 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: On a delete, the webhook MUST delete the Device.
     TEXT[!MUST,implementation,test]: If solas rejects the delete of the Device, the webhook MUST deny the
     TEXT[!MUST,implementation,test]: delete of the old object.
+
+  SECTION: [10.1. Device metadata](#10-1-device-metadata)
+    TEXT[!MUST]: The server MUST keep the other rules of section 5.3 when a status update
+    TEXT[!MUST]: changes the conditions.
+    TEXT[!MUST]: `Device.spec.preemptible` MUST be false unless it is set.
+    TEXT[!MUST,implementation]: `Device.spec.preemptionGracePeriodSeconds` MUST be 30 unless it is set.
+
+  SECTION: [10.2. Holder](#10-2-holder)
+    TEXT[!MUST]: A `claimRef` MUST also hold the priority of the claim.
+    TEXT[!MAY]: A `claimRef` MAY hold the time of the bind, by the clock of the binder.
+    TEXT[!MUST]: The server MUST NOT use that time for any decision.
+
+  SECTION: [10.3. Selection](#10-3-selection)
+    TEXT[!MAY]: `DeviceClaim.spec.selector.cel` MAY hold a CEL expression over the
+    TEXT[!MAY]: variable `device`.
+    TEXT[implementation,test]: A device matches a claim only when the label selector and the CEL
+    TEXT[implementation,test]: expression both match it.
+    TEXT[!MUST,implementation]: If the expression does not compile, the controller MUST NOT bind the
+    TEXT[!MUST,implementation]: claim and MUST set the condition `SelectorValid` to `False`.
+    TEXT[!MUST,implementation]: If the expression fails at run time for a device, that device MUST NOT
+    TEXT[!MUST,implementation]: match.
+
+  SECTION: [10.4. Lease display](#10-4-lease-display)
+    TEXT[!SHOULD,implementation]: The controller SHOULD set `DeviceClaim.status.leaseExpiresAt` on each
+    TEXT[!SHOULD,implementation]: `Bound` claim to the end of its member's lease, `S + D - M`, as a wall
+    TEXT[!SHOULD,implementation]: time by the holder's clock.
+    TEXT[!SHOULD,implementation,test]: The controller SHOULD clear it when the claim becomes `Pending`,
+    TEXT[!SHOULD,implementation,test]: `Suspended`, or `Lost`.
+    TEXT[!MUST]: No component MUST use `leaseExpiresAt` for any decision.
+
+  SECTION: [10.5. Preemption request](#10-5-preemption-request)
+    TEXT[!MAY,implementation]: A `Pending` claim MAY request preemption of a device only when:
+    TEXT[!MAY,implementation]: the device matches the claim, the device is preemptible, the device is
+    TEXT[!MAY,implementation]: bound, and the holder has a lower priority than the claim.
+    TEXT[!MUST,implementation]: A request MUST be a status update of the device that sets
+    TEXT[!MUST,implementation]: `status.preemption`.
+    TEXT[!MUST,implementation]: The request MUST name the requesting claim as a `claimRef` does, with its
+    TEXT[!MUST,implementation]: priority.
+    TEXT[!MUST,implementation]: The request MUST carry the resource version that the controller read.
+    TEXT[!MUST,implementation,test]: The server MUST reject a request whose priority is not greater than the
+    TEXT[!MUST,implementation,test]: priority of the holder.
+    TEXT[!MUST,implementation,test]: The server MUST reject a request that replaces a request of equal or
+    TEXT[!MUST,implementation,test]: greater priority.
+
+  SECTION: [10.6. Release by the holder](#10-6-release-by-the-holder)
+    TEXT[!MUST,implementation]: When the holder's controller sees a request on its device, it MUST set
+    TEXT[!MUST,implementation]: its claim to `Preempting`.
+    TEXT[!MUST,implementation]: The controller MUST record the local time at which it first saw the
+    TEXT[!MUST,implementation]: request.
+    TEXT[!MUST,implementation,test]: When the grace period has passed since that time, by the holder's clock,
+    TEXT[!MUST,implementation,test]: the controller MUST set its claim to `Preempted`.
+    TEXT[!MUST,implementation]: After the claim is `Preempted`, the controller MUST clear the `claimRef`
+    TEXT[!MUST,implementation]: of the device with a status update, and keep the request.
+    TEXT[!MUST,implementation,test]: The controller MUST then set the claim back to `Pending`.
+
+  SECTION: [10.7. Bind by the preemptor](#10-7-bind-by-the-preemptor)
+    TEXT[!MUST,implementation,test]: While a device has a request, the server MUST reject a bind that does not
+    TEXT[!MUST,implementation,test]: name the requesting claim.
+    TEXT[!MUST,implementation,test]: The bind of the requesting claim MUST clear `status.preemption`.
+
+  SECTION: [10.8. Holders that do not respond](#10-8-holders-that-do-not-respond)
+    TEXT[!MUST]: The preemptor MUST NOT clear the `claimRef` of the holder.
+    TEXT[!MUST,implementation,test]: Before each renew, a member MUST handle each preemption request on the
+    TEXT[!MUST,implementation,test]: devices it holds, as section 10.6 describes.
+    TEXT[!MUST,implementation]: If it cannot, it MUST NOT renew.
+
+  SECTION: [10.9. Stale requests](#10-9-stale-requests)
+    TEXT[!MUST,implementation,test]: The sweeper MUST clear a request whose member UID is not in the member
+    TEXT[!MUST,implementation,test]: list, as it does for a `claimRef`, spec 8.3.
+    TEXT[!MUST,implementation]: The controller MUST clear a request that names its own member and a claim
+    TEXT[!MUST,implementation]: that does not exist, as it does for a `claimRef`, spec 6.4.

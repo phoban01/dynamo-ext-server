@@ -130,7 +130,9 @@ func (p *Pivot) upsert(ctx context.Context, o *unstructured.Unstructured) (outco
 	//= spec/solas.md#9-2-copy
 	//# The copy MUST update the Device when its `solas.dev/pivoted-from` names
 	//# the old object.
-	cur.Labels, cur.Annotations, cur.Spec = want.Labels, want.Annotations, want.Spec
+	// Only the description comes from the old object; keep the rest of the
+	// spec, such as attributes set in solas.
+	cur.Labels, cur.Annotations, cur.Spec.Description = want.Labels, want.Annotations, want.Spec.Description
 	if !p.DryRun {
 		if err := p.Solas.Update(ctx, &cur); err != nil {
 			return 0, fmt.Errorf("update device %s: %w", cur.Name, err)
@@ -201,5 +203,5 @@ func (p *Pivot) Verify(ctx context.Context) ([]string, error) {
 func same(cur, want *solasv1alpha1.Device) bool {
 	return maps.Equal(cur.Labels, want.Labels) &&
 		maps.Equal(cur.Annotations, want.Annotations) &&
-		cur.Spec == want.Spec
+		cur.Spec.Description == want.Spec.Description
 }

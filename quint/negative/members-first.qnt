@@ -16,5 +16,10 @@ module members_first {
     membersFirst: true,
     adoptAnyUid: false,
     noTokenCheck: false,
+    priority: Map("a1" -> 1, "a2" -> 0, "b1" -> 2),
+    preemptible: Map("d1" -> true, "d2" -> false),
+    grace: 20,
+    forceClear: false,
+    noPreemptionWait: false,
   }).* from "../solas"
 }

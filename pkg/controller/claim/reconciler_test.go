@@ -6,6 +6,7 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -91,7 +92,7 @@ func getDevice(t *testing.T, c client.Client, name string) *solasv1alpha1.Device
 
 func TestBindMatchingFreeDevice(t *testing.T) {
 	c1 := claim("c1", "u1")
-	c1.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"kind": "gpu"}}
+	c1.Spec.Selector = &claimsv1alpha1.DeviceSelector{LabelSelector: metav1.LabelSelector{MatchLabels: map[string]string{"kind": "gpu"}}}
 	k := fakekube.NewClient(device("cpu-1", map[string]string{"kind": "cpu"}, nil),
 		device("gpu-1", map[string]string{"kind": "gpu"}, nil), c1)
 	settle(t, newReconciler(k, live()), c1)
@@ -104,7 +105,7 @@ func TestBindMatchingFreeDevice(t *testing.T) {
 	if len(got.Finalizers) != 1 || got.Finalizers[0] != claimsv1alpha1.ReleaseFinalizer {
 		t.Errorf("finalizers = %v", got.Finalizers)
 	}
-	if ref := getDevice(t, k, "gpu-1").Status.ClaimRef; ref == nil || *ref != *refTo(c1, muid) {
+	if ref := getDevice(t, k, "gpu-1").Status.ClaimRef; ref == nil || ref.UID != c1.UID || ref.MemberUID != muid || ref.BoundAt == nil {
 		t.Errorf("gpu-1 claimRef = %+v", ref)
 	}
 	if getDevice(t, k, "cpu-1").Status.ClaimRef != nil {
@@ -205,6 +206,38 @@ func TestAdoptOnlyWithTheCurrentMemberUID(t *testing.T) {
 	got := getClaim(t, k, "c1")
 	if got.Status.Phase != claimsv1alpha1.ClaimBound || got.Status.DeviceName != "d1" || got.Status.FencingToken != 1 {
 		t.Fatalf("claim status = %+v, want Bound to d1 with token 1", got.Status)
+	}
+}
+
+//= spec/solas.md#6-3-bind
+//= type=test
+//# It MUST adopt the device only if that read still shows the same `claimRef`.
+
+func TestNoAdoptFromALateList(t *testing.T) {
+	ctx := context.Background()
+	c1 := claim("c1", "u1")
+	c1.Finalizers = []string{claimsv1alpha1.ReleaseFinalizer}
+	c1.Status.Phase = claimsv1alpha1.ClaimPending
+	k := fakekube.NewClient(device("d1", nil, refTo(c1, muid)), c1)
+
+	var before solasv1alpha1.DeviceList
+	if err := k.List(ctx, &before); err != nil {
+		t.Fatal(err)
+	}
+	// c1 released d1 after the list, as a preempted holder does.
+	d1 := getDevice(t, k, "d1")
+	d1.Status.ClaimRef = nil
+	if err := k.Status().Update(ctx, d1); err != nil {
+		t.Fatal(err)
+	}
+
+	r := newReconciler(k, live())
+	r.Reader = staleReader{Reader: k, devices: before}
+	if _, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(c1)}); err != nil {
+		t.Fatal(err)
+	}
+	if p := getClaim(t, k, "c1").Status.Phase; p != claimsv1alpha1.ClaimPending {
+		t.Errorf("c1 phase = %s, want Pending: it adopted a device that no longer names it", p)
 	}
 }
 
@@ -357,5 +390,112 @@ func TestDrainSuspendsThenReleases(t *testing.T) {
 	}
 	if drained, err := r.Drained(ctx, muid); !drained || err != nil {
 		t.Errorf("Drained = %v, %v; want true", drained, err)
+	}
+}
+
+//= spec/solas.md#10-3-selection
+//= type=test
+//# A device matches a claim only when the label selector and the CEL
+//# expression both match it.
+
+func TestCELSelectsOnConditions(t *testing.T) {
+	healthy := device("gpu-ok", map[string]string{"kind": "gpu"}, nil)
+	healthy.Spec.Attributes = map[string]string{"model": "A100"}
+	healthy.Status.Conditions = []metav1.Condition{{Type: "Healthy", Status: metav1.ConditionTrue, Reason: "Ok", LastTransitionTime: metav1.Now()}}
+	sick := device("gpu-sick", map[string]string{"kind": "gpu"}, nil)
+	sick.Spec.Attributes = map[string]string{"model": "A100"}
+	sick.Status.Conditions = []metav1.Condition{{Type: "Healthy", Status: metav1.ConditionFalse, Reason: "Fan", LastTransitionTime: metav1.Now()}}
+	other := device("gpu-h100", map[string]string{"kind": "gpu"}, nil)
+	other.Spec.Attributes = map[string]string{"model": "H100"}
+	other.Status.Conditions = healthy.Status.Conditions
+
+	c1 := claim("c1", "u1")
+	c1.Spec.Selector = &claimsv1alpha1.DeviceSelector{
+		LabelSelector: metav1.LabelSelector{MatchLabels: map[string]string{"kind": "gpu"}},
+		CEL: `device.spec.attributes.model == "A100" &&
+		      device.status.conditions.exists(c, c.type == "Healthy" && c.status == "True")`,
+	}
+	k := fakekube.NewClient(sick, other, healthy, c1)
+	settle(t, newReconciler(k, live()), c1)
+	if got := getClaim(t, k, "c1"); got.Status.DeviceName != "gpu-ok" {
+		t.Errorf("claim bound %q, want gpu-ok", got.Status.DeviceName)
+	}
+}
+
+func TestInvalidCELNeverBinds(t *testing.T) {
+	c1 := claim("c1", "u1")
+	c1.Spec.Selector = &claimsv1alpha1.DeviceSelector{CEL: `device.spec.(`}
+	k := fakekube.NewClient(device("d1", nil, nil), c1)
+	settle(t, newReconciler(k, live()), c1)
+	got := getClaim(t, k, "c1")
+	if got.Status.Phase == claimsv1alpha1.ClaimBound {
+		t.Fatal("a claim with invalid CEL bound a device")
+	}
+	c := meta.FindStatusCondition(got.Status.Conditions, "SelectorValid")
+	if c == nil || c.Status != metav1.ConditionFalse {
+		t.Errorf("SelectorValid = %+v, want False", c)
+	}
+}
+
+//= spec/solas.md#10-4-lease-display
+//= type=test
+//# The controller SHOULD clear it when the claim becomes `Pending`,
+//# `Suspended`, or `Lost`.
+
+func TestLeaseExpiresAtIsShown(t *testing.T) {
+	c1 := claim("c1", "u1")
+	k := fakekube.NewClient(device("d1", nil, nil), c1)
+	m := live()
+	m.st.LeaseEnd = time.Unix(5000, 0)
+	r := newReconciler(k, m)
+	settle(t, r, c1)
+	// The bind ends the first reconcile; the next one shows the lease end.
+	if _, err := r.Reconcile(context.Background(), reconcile.Request{NamespacedName: client.ObjectKeyFromObject(c1)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := getClaim(t, k, "c1").Status.LeaseExpiresAt; got == nil || !got.Time.Equal(time.Unix(5000, 0)) {
+		t.Errorf("leaseExpiresAt = %v, want 5000", got)
+	}
+
+	// The lease lapses: the claim is Suspended and shows no lease end.
+	m.st.Live = false
+	settle(t, r, c1)
+	if got := getClaim(t, k, "c1").Status; got.Phase != claimsv1alpha1.ClaimSuspended || got.LeaseExpiresAt != nil {
+		t.Errorf("claim status = %+v, want Suspended with no leaseExpiresAt", got)
+	}
+}
+
+//= spec/solas.md#7-2-join
+//= type=test
+//# This MUST include `Preempting` and `Preempted` claims, because they still
+//# hold a device.
+
+func TestMarkLostCoversEveryHeldPhase(t *testing.T) {
+	phases := map[string]claimsv1alpha1.ClaimPhase{
+		"bound":      claimsv1alpha1.ClaimBound,
+		"suspended":  claimsv1alpha1.ClaimSuspended,
+		"preempting": claimsv1alpha1.ClaimPreempting,
+		"preempted":  claimsv1alpha1.ClaimPreempted,
+		"pending":    claimsv1alpha1.ClaimPending,
+	}
+	var objs []client.Object
+	for name, p := range phases {
+		c := claim(name, types.UID("u-"+name))
+		c.Status.Phase = p
+		c.Status.MemberUID = "old-uid"
+		objs = append(objs, c)
+	}
+	k := fakekube.NewClient(objs...)
+	if err := newReconciler(k, live()).MarkLost(context.Background(), muid); err != nil {
+		t.Fatal(err)
+	}
+	for name, p := range phases {
+		want := claimsv1alpha1.ClaimLost
+		if p == claimsv1alpha1.ClaimPending {
+			want = p
+		}
+		if got := getClaim(t, k, name).Status.Phase; got != want {
+			t.Errorf("%s: phase = %s, want %s", name, got, want)
+		}
 	}
 }

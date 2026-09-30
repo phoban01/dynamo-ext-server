@@ -28,6 +28,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1alpha1.MemberList{}.OpenAPIModelName():          schema_pkg_apis_solas_v1alpha1_MemberList(ref),
 		v1alpha1.MemberSpec{}.OpenAPIModelName():          schema_pkg_apis_solas_v1alpha1_MemberSpec(ref),
 		v1alpha1.MemberStatus{}.OpenAPIModelName():        schema_pkg_apis_solas_v1alpha1_MemberStatus(ref),
+		v1alpha1.PreemptionRequest{}.OpenAPIModelName():   schema_pkg_apis_solas_v1alpha1_PreemptionRequest(ref),
 		resource.Quantity{}.OpenAPIModelName():            schema_apimachinery_pkg_api_resource_Quantity(ref),
 		v1.APIGroup{}.OpenAPIModelName():                  schema_pkg_apis_meta_v1_APIGroup(ref),
 		v1.APIGroupList{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_APIGroupList(ref),
@@ -133,10 +134,25 @@ func schema_pkg_apis_solas_v1alpha1_ClaimRef(ref common.ReferenceCallback) commo
 							Format:      "",
 						},
 					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Priority is the priority of the claim.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"boundAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BoundAt is when the bind happened, by the binder's clock. For display only.",
+							Ref:         ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
 				},
 				Required: []string{"member", "memberUID", "namespace", "name", "uid"},
 			},
 		},
+		Dependencies: []string{
+			v1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -249,6 +265,35 @@ func schema_pkg_apis_solas_v1alpha1_DeviceSpec(ref common.ReferenceCallback) com
 							Format:      "",
 						},
 					},
+					"attributes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Attributes holds free-form metadata, for example vendor and model.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"preemptible": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Preemptible lets a claim of higher priority take the device.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"preemptionGracePeriodSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PreemptionGracePeriodSeconds is how long a holder may keep the device after a preemption request. The default is 30.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 			},
 		},
@@ -275,11 +320,38 @@ func schema_pkg_apis_solas_v1alpha1_DeviceStatus(ref common.ReferenceCallback) c
 							Format:      "int64",
 						},
 					},
+					"preemption": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Preemption is a request of a claim of higher priority.",
+							Ref:         ref(v1alpha1.PreemptionRequest{}.OpenAPIModelName()),
+						},
+					},
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions hold the health of the device. The party that runs the device sets them.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(v1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			v1alpha1.ClaimRef{}.OpenAPIModelName()},
+			v1alpha1.ClaimRef{}.OpenAPIModelName(), v1alpha1.PreemptionRequest{}.OpenAPIModelName(), v1.Condition{}.OpenAPIModelName()},
 	}
 }
 
@@ -423,6 +495,35 @@ func schema_pkg_apis_solas_v1alpha1_MemberStatus(ref common.ReferenceCallback) c
 		},
 		Dependencies: []string{
 			v1.MicroTime{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_solas_v1alpha1_PreemptionRequest(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PreemptionRequest asks the holder to give up the device.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"claim": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Claim names the claim that asks, as a claimRef does.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(v1alpha1.ClaimRef{}.OpenAPIModelName()),
+						},
+					},
+					"requestedAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RequestedAt is when the claim asked, by its own clock. For display.",
+							Ref:         ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"claim"},
+			},
+		},
+		Dependencies: []string{
+			v1alpha1.ClaimRef{}.OpenAPIModelName(), v1.Time{}.OpenAPIModelName()},
 	}
 }
 

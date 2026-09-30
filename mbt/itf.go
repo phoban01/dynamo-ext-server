@@ -39,6 +39,9 @@ type Device struct {
 	Held  bool
 	Ref   Ref
 	Token int64
+	// Preempt is the preemption request, when Requested is true.
+	Requested bool
+	Preempt   Ref
 }
 
 // Ref is a model claimRef.
@@ -46,6 +49,7 @@ type Ref struct {
 	Member string
 	MUID   int64
 	Claim  string
+	Prio   int64
 }
 
 // Member is a model Member object.
@@ -135,7 +139,11 @@ func decodeState(s map[string]any) (State, error) {
 		if tag, val := variant(d["ref"]); tag == "Held" {
 			r := val.(map[string]any)
 			dev.Held = true
-			dev.Ref = Ref{Member: r["member"].(string), MUID: bigint(r["muid"]), Claim: r["claim"].(string)}
+			dev.Ref = decodeRef(r)
+		}
+		if tag, val := variant(d["preempt"]); tag == "Held" {
+			dev.Requested = true
+			dev.Preempt = decodeRef(val.(map[string]any))
 		}
 		st.Devices[name] = dev
 	}
@@ -209,4 +217,8 @@ func variant(v any) (string, any) {
 	m, _ := v.(map[string]any)
 	tag, _ := m["tag"].(string)
 	return tag, m["value"]
+}
+
+func decodeRef(r map[string]any) Ref {
+	return Ref{Member: r["member"].(string), MUID: bigint(r["muid"]), Claim: r["claim"].(string), Prio: bigint(r["prio"])}
 }
