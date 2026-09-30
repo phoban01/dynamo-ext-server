@@ -3,11 +3,13 @@
 // linearizable map with conditional writes, as sections 2 and 3 give.
 module solas {
   // A claimRef, spec 5.2. The claim ID stands for the claim UID.
-  type ClaimRef = { member: str, muid: int, claim: str }
+  // prio is the priority of the claim, spec 10.2.
+  type ClaimRef = { member: str, muid: int, claim: str, prio: int }
   type OptRef = Held(ClaimRef) | Free
 
   // token is the fencing token of the last bind, spec 5.3.
-  type Device = { rv: int, ref: OptRef, token: int }
+  // preempt is a preemption request, spec 10.5.
+  type Device = { rv: int, ref: OptRef, token: int, preempt: OptRef }
 
   // A Member object in the table, spec 7.1.
   type MemberObj = { exists: bool, uid: int, rv: int }
@@ -21,6 +23,11 @@ module solas {
     muid: int,
     // The fencing token of the bind, spec 6.3.
     token: int,
+    // The holder's local time when it first saw a preemption request.
+    seenAt: int,
+    // The preemptor's local time when it wrote its request, and the device.
+    reqAt: int,
+    reqDev: str,
   }
 
   // What an observer saw of another Member, spec 8.1. rv -1 means none.
@@ -68,6 +75,14 @@ module solas {
     membersFirst: bool,
     adoptAnyUid: bool,
     noTokenCheck: bool,
+    // Priority of each claim and preemptibility of each device, spec 10.
+    priority: str -> int,
+    preemptible: str -> bool,
+    grace: int,
+    // forceClear lets a preemptor clear a holder that did not respond,
+    // spec 10.8. noPreemptionWait drops the wait before it.
+    forceClear: bool,
+    noPreemptionWait: bool,
   }
 
   type State = {
@@ -113,13 +128,13 @@ module solas {
     draining: false,
     seen: cfg.clusters.mapBy(_ => NOSEEN),
     sweepPhase: 0,
-    sweepDevs: cfg.devices.mapBy(_ => { rv: 0, ref: Free, token: 0 }),
+    sweepDevs: cfg.devices.mapBy(_ => { rv: 0, ref: Free, token: 0, preempt: Free }),
     sweepUids: Set(),
   }
 
   action init = s' = {
     now: 0,
-    devices: CFG.devices.mapBy(_ => { rv: 0, ref: Free, token: 0 }),
+    devices: CFG.devices.mapBy(_ => { rv: 0, ref: Free, token: 0, preempt: Free }),
     devCounter: 0,
     members: CFG.clusters.mapBy(_ => { exists: false, uid: 0, rv: 0 }),
     memberCounter: 0,
@@ -127,6 +142,7 @@ module solas {
     clusters: CFG.clusters.mapBy(c => initCluster(CFG, c)),
     claims: CFG.claims.mapBy(_ => {
       exists: true, deleting: false, phase: "Pending", dev: "", muid: 0, token: 0,
+      seenAt: 0, reqAt: 0, reqDev: "",
     }),
     inflight: Set(),
     cleared: false,
@@ -456,6 +472,8 @@ module solas {
       cm.phase == "Pending",
       CFG.devices.forall(e => not(namesWith(s.devices.get(e).ref, k, cl.uid))),
       isFree(dv.ref),
+      // A device with a preemption request is kept for the preemptor, 10.7.
+      isFree(dv.preempt) or names(dv.preempt, k),
       s.inflight.size() < 3,
       s' = {
         ...s,
@@ -470,9 +488,11 @@ module solas {
   // condition and rejects a change from one holder to another.
   action bindLand(msg: BindMsg): bool = {
     val dv = s.devices.get(msg.dev)
-    val ref = Held({ member: msg.cluster, muid: msg.muid, claim: msg.claim })
+    val ref = Held({ member: msg.cluster, muid: msg.muid, claim: msg.claim, prio: CFG.priority.get(msg.claim) })
+    // While a request stands, only the preemptor may bind, spec 10.7.
+    val reserved = isFree(dv.preempt) or names(dv.preempt, msg.claim)
     val ok = CFG.unconditionalBind
-      or (dv.rv == msg.rv and (isFree(dv.ref) or dv.ref == ref))
+      or (dv.rv == msg.rv and (isFree(dv.ref) or dv.ref == ref) and reserved)
     val rest = s.inflight.exclude(Set(msg))
     // A bind of a free device gets the old token plus 1, spec 5.3.
     val token = if (isFree(dv.ref)) dv.token + 1 else dv.token
@@ -482,7 +502,8 @@ module solas {
       if (ok)
         s' = {
           ...written,
-          devices: written.devices.set(msg.dev, { ...written.devices.get(msg.dev), token: token }),
+          // The bind of the preemptor clears the request, spec 10.7.
+          devices: written.devices.set(msg.dev, { ...written.devices.get(msg.dev), token: token, preempt: Free }),
           bindings: s.bindings.union(Set({ dev: msg.dev, token: token, claim: msg.claim })),
           inflight: rest,
         }
@@ -584,7 +605,7 @@ module solas {
     val cm = s.claims.get(k)
     all {
       active(cl),
-      cm.phase == "Bound",
+      cm.phase == "Bound" or cm.phase == "Preempting",
       not(localLive(c)) or cl.draining,
       s' = { ...s, claims: s.claims.set(k, { ...cm, phase: "Suspended" }) },
     }
@@ -688,13 +709,155 @@ module solas {
     }
   }
 
+  // ---- Preemption, spec 10 ----
+
+  pure def refPrio(ref: OptRef): int = match ref {
+    | Held(r) => r.prio
+    | Free => -1
+  }
+
+  // A Pending claim that finds no free device requests preemption of a
+  // preemptible device whose holder has a lower priority, spec 10.5. The
+  // server checks the priorities, and the write is conditional, so it is
+  // one step here.
+  action requestPreemption(k: str, d: str): bool = {
+    val c = CFG.owner.get(k)
+    val cl = s.clusters.get(c)
+    val cm = s.claims.get(k)
+    val dv = s.devices.get(d)
+    val p = CFG.priority.get(k)
+    val rv = s.devCounter + 1
+    all {
+      localLive(c),
+      not(cl.draining),
+      cm.exists,
+      not(cm.deleting),
+      cm.phase == "Pending",
+      CFG.devices.forall(e => not(isFree(s.devices.get(e).ref))),
+      CFG.preemptible.get(d),
+      not(isFree(dv.ref)),
+      refPrio(dv.ref) < p,
+      refPrio(dv.preempt) < p,
+      s' = {
+        ...s,
+        devices: s.devices.set(d, {
+          ...dv, rv: rv, preempt: Held({ member: c, muid: cl.uid, claim: k, prio: p }),
+        }),
+        devCounter: rv,
+        claims: s.claims.set(k, { ...cm, reqAt: cl.clock, reqDev: d }),
+      },
+    }
+  }
+
+  // The holder sees a request on its device, spec 10.6.
+  action seePreemption(k: str): bool = {
+    val cl = s.clusters.get(CFG.owner.get(k))
+    val cm = s.claims.get(k)
+    val dv = s.devices.get(cm.dev)
+    all {
+      active(cl),
+      cm.phase == "Bound",
+      names(dv.ref, k),
+      not(isFree(dv.preempt)),
+      s' = { ...s, claims: s.claims.set(k, { ...cm, phase: "Preempting", seenAt: cl.clock }) },
+    }
+  }
+
+  // The grace period ends on the holder's clock.
+  action markPreempted(k: str): bool = {
+    val cl = s.clusters.get(CFG.owner.get(k))
+    val cm = s.claims.get(k)
+    all {
+      active(cl),
+      cm.phase == "Preempting",
+      cl.clock >= cm.seenAt + CFG.grace,
+      s' = { ...s, claims: s.claims.set(k, { ...cm, phase: "Preempted" }) },
+    }
+  }
+
+  // The holder clears its ref, keeps the request, and goes back to Pending.
+  action releasePreempted(k: str): bool = {
+    val cl = s.clusters.get(CFG.owner.get(k))
+    val cm = s.claims.get(k)
+    val pending = { ...cm, phase: "Pending", dev: "" }
+    all {
+      active(cl),
+      cm.phase == "Preempted",
+      if (names(s.devices.get(cm.dev).ref, k))
+        s' = { ...writeRef(cm.dev, Free), claims: s.claims.set(k, pending) }
+      else
+        s' = { ...s, claims: s.claims.set(k, pending) },
+    }
+  }
+
+  // A preemptor clears a holder that did not respond, spec 10.8.
+  action forceClear(k: str): bool = {
+    val c = CFG.owner.get(k)
+    val cl = s.clusters.get(c)
+    val cm = s.claims.get(k)
+    val dv = s.devices.get(cm.reqDev)
+    all {
+      CFG.forceClear,
+      localLive(c),
+      cm.exists,
+      not(cm.deleting),
+      cm.phase == "Pending",
+      cm.reqDev != "",
+      names(dv.preempt, k),
+      not(isFree(dv.ref)),
+      not(names(dv.ref, k)),
+      CFG.noPreemptionWait or cl.clock >= cm.reqAt + CFG.grace + CFG.D,
+      s' = writeRef(cm.reqDev, Free),
+    }
+  }
+
+  // A preemptor withdraws a request that it no longer needs, and a
+  // controller clears a request of its own member for a claim that is
+  // gone, spec 10.9.
+  action withdrawPreemption(c: str, d: str): bool = {
+    val cl = s.clusters.get(c)
+    val dv = s.devices.get(d)
+    val k = refClaim(dv.preempt)
+    val cm = s.claims.get(k)
+    val rv = s.devCounter + 1
+    all {
+      active(cl),
+      refMember(dv.preempt) == c,
+      not(cm.exists) or cm.deleting or cm.phase != "Pending",
+      s' = { ...s, devices: s.devices.set(d, { ...dv, rv: rv, preempt: Free }), devCounter: rv },
+    }
+  }
+
+  // The sweeper clears a request whose member UID is gone, spec 10.9.
+  action sweepClearPreempt(c: str, d: str): bool = {
+    val cl = s.clusters.get(c)
+    val listed = cl.sweepDevs.get(d)
+    val dv = s.devices.get(d)
+    val rv = s.devCounter + 1
+    all {
+      active(cl),
+      cl.sweepPhase == 2,
+      not(isFree(listed.preempt)),
+      not(cl.sweepUids.contains(refMuid(listed.preempt))),
+      dv.rv == listed.rv,
+      s' = { ...s, devices: s.devices.set(d, { ...dv, rv: rv, preempt: Free }), devCounter: rv },
+    }
+  }
+
   // ---- Invariants, spec 8.4 ----
+
+  // A request always beats the holder of its device, spec 10.5.
+  val requestBeatsHolder = CFG.devices.forall(d => {
+    val dv = s.devices.get(d)
+    isFree(dv.preempt) or isFree(dv.ref) or refPrio(dv.ref) < refPrio(dv.preempt)
+  })
 
   // A claim is in effect while it is Bound and its member is live by the
   // member's own clock. Workloads use a device only then.
   def effective(k: str): bool = {
     val cm = s.claims.get(k)
-    cm.exists and not(cm.deleting) and cm.phase == "Bound"
+    // A Preempting claim is in effect, as a Bound one is, spec 10.6.
+    cm.exists and not(cm.deleting) and (cm.phase == "Bound" or cm.phase == "Preempting")
       and localLive(CFG.owner.get(k))
   }
 
@@ -736,7 +899,7 @@ module solas {
 
   val fencing = tokensUnique and usesInOrder and useMatchesBinding
 
-  val safety = noDoubleBind and claimMatchesDevice and leaseSafety and fencing
+  val safety = noDoubleBind and claimMatchesDevice and leaseSafety and fencing and requestBeatsHolder
 
   // ---- Witnesses ----
   // Each witness must be violated in a run. A violation shows that the
@@ -771,6 +934,13 @@ module solas {
       drainRelease(k, d),
       finishLeave(c),
       use(k),
+      requestPreemption(k, d),
+      seePreemption(k),
+      markPreempted(k),
+      releasePreempted(k),
+      forceClear(k),
+      withdrawPreemption(c, d),
+      sweepClearPreempt(c, d),
       join(c),
       renewSend(c),
       renewLand(c),
@@ -803,6 +973,11 @@ module solas2 {
     membersFirst: false,
     adoptAnyUid: false,
     noTokenCheck: false,
+    priority: Map("a1" -> 1, "a2" -> 0, "b1" -> 2),
+    preemptible: Map("d1" -> true, "d2" -> false),
+    grace: 20,
+    forceClear: false,
+    noPreemptionWait: false,
   }).*
 
   pure val fastB = Map("a" -> 0, "b" -> 1)
@@ -883,4 +1058,47 @@ module solas2 {
       .expect(s.claims.get("a1").phase == "Bound")
       .then(use("a1"))
       .expect(s.staleRejected and s.lastUse.get("d1").claim == "b1" and safety)
+
+  pure val noDrift = Map("a" -> 0, "b" -> 0)
+
+  // a2 (priority 0) holds the preemptible d1 and a1 (priority 1) holds d2.
+  // b joins with b1 (priority 2), which finds no free device.
+  run allHeld =
+    init
+      .then(join("a"))
+      .then(bindSend("a2", "d1"))
+      .then(bindLand({ cluster: "a", claim: "a2", dev: "d1", rv: 0, muid: 1 }))
+      .then(adopt("a2", "d1"))
+      .then(bindSend("a1", "d2"))
+      .then(bindLand({ cluster: "a", claim: "a1", dev: "d2", rv: 0, muid: 1 }))
+      .then(adopt("a1", "d2"))
+      .then(join("b"))
+
+  // b1 requests d1. a2 sees the request, runs out its grace period, and
+  // releases. Spec 10.5 and 10.6.
+  run released =
+    allHeld
+      .then(requestPreemption("b1", "d1"))
+      .then(seePreemption("a2"))
+      .expect(s.claims.get("a2").phase == "Preempting" and effective("a2") and safety)
+      .then(tickBy(noDrift))
+      .then(tickBy(noDrift))
+      .then(markPreempted("a2"))
+      .then(releasePreempted("a2"))
+      .expect(s.claims.get("a2").phase == "Pending" and s.devices.get("d1").ref == Free and safety)
+
+  // The device is kept for b1, which binds it with token 2. Spec 10.7.
+  run preemptionTest =
+    released
+      .then(bindSend("b1", "d1"))
+      .then(bindLand({ cluster: "b", claim: "b1", dev: "d1", rv: 4, muid: 2 }))
+      .then(adopt("b1", "d1"))
+      .expect(s.claims.get("b1").phase == "Bound" and s.claims.get("b1").token == 2
+        and s.devices.get("d1").preempt == Free and safety)
+
+  // While the request stands, a2 cannot take d1 back. Spec 10.7.
+  run reservationTest = released.then(bindSend("a2", "d1").fail())
+
+  // d2 is not preemptible. Spec 10.5.
+  run notPreemptibleTest = allHeld.then(requestPreemption("b1", "d2").fail())
 }
