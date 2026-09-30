@@ -21,10 +21,22 @@ import (
 	"github.com/phoban01/solas/pkg/controller/scheme"
 )
 
+// Options change how the fake client behaves.
+type Options struct {
+	// Unconditional drops the resource version check and the holder check
+	// of Device status updates, to break spec 5.3 on purpose.
+	Unconditional bool
+}
+
 // NewClient returns a fake client with the objects. It gives each created
 // object a UID, and it applies the Device status rules of spec 5.3: a new
 // holder needs a free device, and a bind raises the fencing token.
 func NewClient(objs ...client.Object) client.WithWatch {
+	return NewClientWithOptions(Options{}, objs...)
+}
+
+// NewClientWithOptions is NewClient with options.
+func NewClientWithOptions(o Options, objs ...client.Object) client.WithWatch {
 	return fake.NewClientBuilder().
 		WithScheme(scheme.New()).
 		WithObjects(objs...).
@@ -41,7 +53,7 @@ func NewClient(objs ...client.Object) client.WithWatch {
 			},
 			SubResourceUpdate: func(ctx context.Context, c client.Client, sub string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 				if d, ok := obj.(*solasv1alpha1.Device); ok && sub == "status" {
-					if err := deviceStatus(ctx, c, d); err != nil {
+					if err := deviceStatus(ctx, c, d, o.Unconditional); err != nil {
 						return err
 					}
 				}
@@ -52,10 +64,18 @@ func NewClient(objs ...client.Object) client.WithWatch {
 }
 
 // deviceStatus applies the status strategy of solas-apiserver to d.
-func deviceStatus(ctx context.Context, c client.Client, d *solasv1alpha1.Device) error {
+func deviceStatus(ctx context.Context, c client.Client, d *solasv1alpha1.Device, unconditional bool) error {
 	var old solasv1alpha1.Device
 	if err := c.Get(ctx, client.ObjectKeyFromObject(d), &old); err != nil {
 		return err
+	}
+	if unconditional {
+		d.ResourceVersion = old.ResourceVersion
+		d.Status.FencingToken = old.Status.FencingToken
+		if old.Status.ClaimRef == nil && d.Status.ClaimRef != nil {
+			d.Status.FencingToken++
+		}
+		return nil
 	}
 	if old.ResourceVersion != d.ResourceVersion {
 		return apierrors.NewConflict(schema.GroupResource{Group: "solas.dev", Resource: "devices"}, d.Name,
