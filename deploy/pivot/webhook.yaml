@@ -1,0 +1,25 @@
+# hack/gen-webhook-certs.sh sets the caBundle.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: solas-pivot
+webhooks:
+  - name: pivot.solas.dev
+    admissionReviewVersions: ["v1"]
+    clientConfig:
+      service:
+        name: solas-pivot
+        namespace: solas-system
+        path: /mutate
+        port: 443
+    rules:
+      - apiGroups: ["inventory.example.com"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["devices"]
+        scope: "*"
+    # No write of the old resource may skip solas, spec 9.4.
+    failurePolicy: Fail
+    # The webhook writes solas Devices, but not on a dry run.
+    sideEffects: NoneOnDryRun
+    timeoutSeconds: 10

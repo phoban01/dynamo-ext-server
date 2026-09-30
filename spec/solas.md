@@ -538,3 +538,56 @@ The Quint model checks these properties:
   a use from a newer bind.
 - A claim for a free, matching device becomes `Bound` while its member
   is live.
+
+## 9. Pivot
+
+### 9.1. Mapping
+
+A pivot moves the objects of an existing Device CRD in a cluster's etcd
+into solas Devices, ADR 0010.
+The old object and its Device MUST have the same name.
+The Device MUST get the labels of the old object.
+The Device MUST get the annotations of the old object, except
+`kubectl.kubernetes.io/last-applied-configuration`.
+The Device MUST get its description from a field of the old object that
+the pivot names.
+The pivot MUST NOT copy the status of the old object.
+A pivoted device starts free.
+The Device MUST have the annotation `solas.dev/pivoted-from`, set to the
+group, the resource, the namespace, and the name of the old object.
+It names the object, not its UID, because a webhook sees a new object
+before the API server gives it a UID.
+The old object MUST have the annotation `solas.dev/pivoted-to`, set to
+`solas.dev/devices/` and the name.
+
+### 9.2. Copy
+
+The copy MUST create the Device when it does not exist.
+The copy MUST update the Device when its `solas.dev/pivoted-from` names
+the old object.
+The copy MUST NOT change a Device whose `solas.dev/pivoted-from` is not
+set or names another object.
+It MUST report each such Device as a conflict.
+Running the copy twice MUST give the same result as running it once.
+With `--dry-run`, the copy MUST NOT write.
+
+### 9.3. Verify
+
+The verify MUST check that each old object has a Device.
+It MUST check that the Device names the old object, and that the labels
+and the description match.
+It MUST exit with a status other than 0 when any check fails.
+
+### 9.4. Webhook
+
+The webhook MUST be a mutating admission webhook on the old resource,
+for create, update, and delete.
+On a create or an update, the webhook MUST write the Device before it
+allows the request.
+It MUST then add `solas.dev/pivoted-to` to the old object with a patch.
+If the webhook cannot write the Device, it MUST deny the request.
+The webhook configuration MUST use `failurePolicy: Fail`.
+On a dry-run request, the webhook MUST NOT write the Device.
+On a delete, the webhook MUST delete the Device.
+If solas rejects the delete of the Device, the webhook MUST deny the
+delete of the old object.

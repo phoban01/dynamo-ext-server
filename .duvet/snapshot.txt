@@ -305,3 +305,45 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: If the clear fails with `409 Conflict`, the sweeper MUST skip the device
     TEXT[!MUST,implementation]: until its next run.
     TEXT[!MUST,implementation]: The sweeper MUST run at least once every `D`.
+
+  SECTION: [9.1. Mapping](#9-1-mapping)
+    TEXT[!MUST,implementation]: The old object and its Device MUST have the same name.
+    TEXT[!MUST,implementation]: The Device MUST get the labels of the old object.
+    TEXT[!MUST,implementation,test]: The Device MUST get the annotations of the old object, except
+    TEXT[!MUST,implementation,test]: `kubectl.kubernetes.io/last-applied-configuration`.
+    TEXT[!MUST,implementation]: The Device MUST get its description from a field of the old object that
+    TEXT[!MUST,implementation]: the pivot names.
+    TEXT[!MUST,implementation,test]: The pivot MUST NOT copy the status of the old object.
+    TEXT[!MUST,implementation]: The Device MUST have the annotation `solas.dev/pivoted-from`, set to the
+    TEXT[!MUST,implementation]: group, the resource, the namespace, and the name of the old object.
+    TEXT[!MUST,implementation]: The old object MUST have the annotation `solas.dev/pivoted-to`, set to
+    TEXT[!MUST,implementation]: `solas.dev/devices/` and the name.
+
+  SECTION: [9.2. Copy](#9-2-copy)
+    TEXT[!MUST,implementation]: The copy MUST create the Device when it does not exist.
+    TEXT[!MUST,implementation]: The copy MUST update the Device when its `solas.dev/pivoted-from` names
+    TEXT[!MUST,implementation]: the old object.
+    TEXT[!MUST,implementation,test]: The copy MUST NOT change a Device whose `solas.dev/pivoted-from` is not
+    TEXT[!MUST,implementation,test]: set or names another object.
+    TEXT[!MUST,implementation]: It MUST report each such Device as a conflict.
+    TEXT[!MUST,implementation,test]: Running the copy twice MUST give the same result as running it once.
+    TEXT[!MUST,implementation,test]: With `--dry-run`, the copy MUST NOT write.
+
+  SECTION: [9.3. Verify](#9-3-verify)
+    TEXT[!MUST,implementation]: The verify MUST check that each old object has a Device.
+    TEXT[!MUST,implementation,test]: It MUST check that the Device names the old object, and that the labels
+    TEXT[!MUST,implementation,test]: and the description match.
+    TEXT[!MUST,implementation]: It MUST exit with a status other than 0 when any check fails.
+
+  SECTION: [9.4. Webhook](#9-4-webhook)
+    TEXT[!MUST,implementation]: The webhook MUST be a mutating admission webhook on the old resource,
+    TEXT[!MUST,implementation]: for create, update, and delete.
+    TEXT[!MUST,implementation,test]: On a create or an update, the webhook MUST write the Device before it
+    TEXT[!MUST,implementation,test]: allows the request.
+    TEXT[!MUST,implementation,test]: It MUST then add `solas.dev/pivoted-to` to the old object with a patch.
+    TEXT[!MUST,implementation]: If the webhook cannot write the Device, it MUST deny the request.
+    TEXT[!MUST,implementation,test]: The webhook configuration MUST use `failurePolicy: Fail`.
+    TEXT[!MUST,implementation,test]: On a dry-run request, the webhook MUST NOT write the Device.
+    TEXT[!MUST,implementation]: On a delete, the webhook MUST delete the Device.
+    TEXT[!MUST,implementation,test]: If solas rejects the delete of the Device, the webhook MUST deny the
+    TEXT[!MUST,implementation,test]: delete of the old object.

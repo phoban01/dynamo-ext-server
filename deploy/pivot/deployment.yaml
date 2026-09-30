@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solas-pivot
+  namespace: solas-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: solas-pivot}
+  template:
+    metadata:
+      labels: {app: solas-pivot}
+    spec:
+      serviceAccountName: solas-pivot
+      containers:
+        - name: webhook
+          image: solas-pivot:dev
+          imagePullPolicy: IfNotPresent
+          args:
+            - webhook
+            - --from=inventory.example.com/v1/devices
+            - --description-path=spec.description
+            - --tls-cert=/certs/tls.crt
+            - --tls-key=/certs/tls.key
+          ports:
+            - containerPort: 8443
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8443, scheme: HTTPS}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {memory: 64Mi}
+          volumeMounts:
+            - {name: certs, mountPath: /certs, readOnly: true}
+      volumes:
+        - name: certs
+          secret: {secretName: solas-pivot-tls}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: solas-pivot
+  namespace: solas-system
+spec:
+  selector: {app: solas-pivot}
+  ports:
+    - port: 443
+      targetPort: 8443

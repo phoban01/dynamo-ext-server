@@ -8,7 +8,7 @@ COPY pkg/ pkg/
 COPY internal/ internal/
 ARG TARGETOS TARGETARCH
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags="-s -w" -o /out/ ./cmd/solas-apiserver ./cmd/solas-controller ./cmd/solas-demo
+    go build -trimpath -ldflags="-s -w" -o /out/ ./cmd/solas-apiserver ./cmd/solas-controller ./cmd/solas-demo ./cmd/solas-pivot
 
 FROM gcr.io/distroless/static-debian12:nonroot AS controller
 COPY --from=build /out/solas-controller /solas-controller
@@ -24,3 +24,8 @@ FROM gcr.io/distroless/static-debian12:nonroot AS demo
 COPY --from=build /out/solas-demo /solas-demo
 USER 65532:65532
 ENTRYPOINT ["/solas-demo"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS pivot
+COPY --from=build /out/solas-pivot /solas-pivot
+USER 65532:65532
+ENTRYPOINT ["/solas-pivot"]

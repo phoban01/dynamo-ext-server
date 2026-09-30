@@ -77,6 +77,8 @@ Claude Code session, so heavy jobs must not overlap.
   ([docs/adr/0008-fencing-tokens.md](docs/adr/0008-fencing-tokens.md)).
 - Clusters run with k3d
   ([docs/adr/0009-k3d.md](docs/adr/0009-k3d.md)).
+- A mutating webhook and a CLI pivot Devices from an etcd CRD into solas
+  ([docs/adr/0010-pivot.md](docs/adr/0010-pivot.md)).
 - The API groups are `solas.dev/v1alpha1` for Device and Member, and
   `claims.solas.dev/v1alpha1` for DeviceClaim
   ([docs/adr/0006-api-group.md](docs/adr/0006-api-group.md)).

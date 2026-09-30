@@ -1,0 +1,15 @@
+apiVersion: inventory.example.com/v1
+kind: Device
+metadata:
+  name: gpu-old-1
+  labels: {kind: gpu}
+spec:
+  description: an A100 kept in etcd
+---
+apiVersion: inventory.example.com/v1
+kind: Device
+metadata:
+  name: gpu-old-2
+  labels: {kind: gpu}
+spec:
+  description: an H100 kept in etcd
