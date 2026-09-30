@@ -1,0 +1,11 @@
+# A claim of high priority in cluster b. No A100 is free, so it asks the
+# holder with the lowest priority to give one up.
+apiVersion: claims.solas.dev/v1alpha1
+kind: DeviceClaim
+metadata:
+  name: urgent
+  namespace: work
+spec:
+  priority: 5
+  selector:
+    cel: device.spec.attributes.model == 'A100'

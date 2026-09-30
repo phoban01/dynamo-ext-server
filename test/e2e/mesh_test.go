@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
@@ -34,20 +34,41 @@ func eventually(t *testing.T, timeout time.Duration, what string, cond func(ctx 
 	}
 }
 
-func phase(ctx context.Context, c client.Client) claimsv1alpha1.ClaimPhase {
+func getClaim(ctx context.Context, c client.Client, name string) *claimsv1alpha1.DeviceClaim {
 	var claim claimsv1alpha1.DeviceClaim
-	if err := c.Get(ctx, client.ObjectKey{Namespace: "work", Name: "job"}, &claim); err != nil {
-		return ""
+	if err := c.Get(ctx, client.ObjectKey{Namespace: "work", Name: name}, &claim); err != nil {
+		return &claimsv1alpha1.DeviceClaim{}
 	}
-	return claim.Status.Phase
+	return &claim
 }
 
-func holder(ctx context.Context, c client.Client) string {
+func phase(ctx context.Context, c client.Client, name string) claimsv1alpha1.ClaimPhase {
+	return getClaim(ctx, c, name).Status.Phase
+}
+
+// waitPhase waits until the claim in cluster c has phase p.
+func waitPhase(t *testing.T, c client.Client, name string, p claimsv1alpha1.ClaimPhase, timeout time.Duration) {
+	t.Helper()
+	eventually(t, timeout, fmt.Sprintf("claim %s %s", name, p), func(ctx context.Context) bool {
+		return phase(ctx, c, name) == p
+	})
+}
+
+func getDevice(ctx context.Context, c client.Client, name string) *solasv1alpha1.Device {
 	var d solasv1alpha1.Device
-	if err := c.Get(ctx, client.ObjectKey{Name: "gpu-1"}, &d); err != nil || d.Status.ClaimRef == nil {
+	if err := c.Get(ctx, client.ObjectKey{Name: name}, &d); err != nil {
+		return &solasv1alpha1.Device{}
+	}
+	return &d
+}
+
+// holder returns member/claim/token of the holder of a device.
+func holder(ctx context.Context, c client.Client, name string) string {
+	d := getDevice(ctx, c, name)
+	if d.Status.ClaimRef == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s/%d", d.Status.ClaimRef.Member, d.Status.FencingToken)
+	return fmt.Sprintf("%s/%s/%d", d.Status.ClaimRef.Member, d.Status.ClaimRef.Name, d.Status.FencingToken)
 }
 
 type use struct {
@@ -84,33 +105,103 @@ func memberUID(ctx context.Context, c client.Client, name string) string {
 	return string(m.UID)
 }
 
-// TestMesh runs the demo scenario: sharing, a race, fencing, and rejoin.
-// Spec sections 5 to 8.
+// setReady sets the Ready condition of a device, as the party that runs
+// the device would.
+func setReady(t *testing.T, device, status, reason string) {
+	t.Helper()
+	patch := fmt.Sprintf(`{"status":{"conditions":[{"type":"Ready","status":%q,"reason":%q,`+
+		`"message":"set by the test","lastTransitionTime":%q}]}}`, status, reason, time.Now().UTC().Format(time.RFC3339))
+	run(t, "", "kubectl", "--kubeconfig", kubeconfig("a"), "patch", "device", device,
+		"--subresource=status", "--type=merge", "-p", patch)
+}
+
+func apply(t *testing.T, cluster, manifest string) {
+	t.Helper()
+	run(t, "", "kubectl", "--kubeconfig", kubeconfig(cluster), "apply", "-f", root+"/demo/k3d/manifests/"+manifest)
+}
+
+// TestMesh runs the demo scenario: the device pool, selection, preemption,
+// a race, fencing, and rejoin. Spec sections 5 to 10.
 func TestMesh(t *testing.T) {
-	var winner, loser, deviceURL, oldUID string
+	var winner, loser, deviceURL, oldUID, victim string
 	clients := map[string]client.Client{}
 
-	f := features.New("two clusters share one table").
+	f := features.New("two clusters share one device pool").
 		Setup(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 			clients["a"], clients["b"] = clientFor(t, "a"), clientFor(t, "b")
 			return ctx
 		}).
-		Assess("a device created in a appears in b", func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			d := &solasv1alpha1.Device{ObjectMeta: metav1.ObjectMeta{Name: "gpu-1", Labels: map[string]string{"kind": "gpu"}}}
-			if err := clients["a"].Create(ctx, d); err != nil {
-				t.Fatal(err)
+		Assess("devices created in a appear in b", func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+			apply(t, "a", "devices.yaml")
+			for _, d := range []string{"gpu-a100-1", "gpu-a100-2", "gpu-h100-1", "gpu-t4-1", "fpga-1", "nic-1", "nic-2"} {
+				setReady(t, d, "True", "Healthy")
 			}
-			eventually(t, 30*time.Second, "gpu-1 visible in b", func(ctx context.Context) bool {
-				var got solasv1alpha1.Device
-				return clients["b"].Get(ctx, client.ObjectKey{Name: "gpu-1"}, &got) == nil
+			setReady(t, "gpu-t4-2", "False", "Overheating")
+			eventually(t, 30*time.Second, "gpu-t4-2 not Ready in b", func(ctx context.Context) bool {
+				c := meta.FindStatusCondition(getDevice(ctx, clients["b"], "gpu-t4-2").Status.Conditions, "Ready")
+				return c != nil && c.Status == "False"
 			})
 			return ctx
 		}).
-		Assess("claims in a and b race and one wins", func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			run(t, "", "docker", "rm", "-f", "solas-device-gpu-1")
-			run(t, "", "docker", "run", "-d", "--name", "solas-device-gpu-1", "--network", "solas-mesh", "solas-demo:dev", "device")
+		Assess("claims select devices with labels and CEL", func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+			apply(t, "a", "claims-a.yaml")
+			for _, c := range []string{"train", "infer", "net"} {
+				waitPhase(t, clients["a"], c, claimsv1alpha1.ClaimBound, 60*time.Second)
+			}
+			apply(t, "b", "claims-b.yaml")
+			for _, c := range []string{"render", "encode"} {
+				waitPhase(t, clients["b"], c, claimsv1alpha1.ClaimBound, 60*time.Second)
+			}
+			want := map[string]string{"infer": "gpu-t4-1", "net": "nic-1"}
+			for c, d := range want {
+				if got := getClaim(ctx, clients["a"], c).Status.DeviceName; got != d {
+					t.Errorf("a/%s holds %q, want %s", c, got, d)
+				}
+			}
+			if got := getClaim(ctx, clients["b"], "encode").Status.DeviceName; got != "fpga-1" {
+				t.Errorf("b/encode holds %q, want fpga-1", got)
+			}
+			for _, d := range []string{"gpu-t4-2", "nic-2", "gpu-h100-1"} {
+				if h := holder(ctx, clients["a"], d); h != "" {
+					t.Errorf("%s holder = %s, want free", d, h)
+				}
+			}
+			if c := getClaim(ctx, clients["a"], "train"); c.Status.LeaseExpiresAt == nil {
+				t.Errorf("a/train shows no lease end")
+			}
+			return ctx
+		}).
+		Assess("a claim of higher priority preempts across clusters", func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+			victim = getClaim(ctx, clients["a"], "train").Status.DeviceName
+			apply(t, "b", "urgent.yaml")
+			waitPhase(t, clients["a"], "train", claimsv1alpha1.ClaimPreempting, 30*time.Second)
+			if p := getDevice(ctx, clients["a"], victim).Status.Preemption; p == nil || p.Claim.Name != "urgent" || p.Claim.Priority != 5 {
+				t.Fatalf("%s preemption = %+v, want urgent at priority 5", victim, p)
+			}
+			waitPhase(t, clients["b"], "urgent", claimsv1alpha1.ClaimBound, 60*time.Second)
+			if got := getClaim(ctx, clients["b"], "urgent").Status.DeviceName; got != victim {
+				t.Fatalf("b/urgent holds %q, want %s", got, victim)
+			}
+			waitPhase(t, clients["a"], "train", claimsv1alpha1.ClaimPending, 30*time.Second)
+			train := getClaim(ctx, clients["a"], "train")
+			if !meta.IsStatusConditionTrue(train.Status.Conditions, "Preempted") {
+				t.Errorf("a/train has no Preempted condition: %+v", train.Status.Conditions)
+			}
+			if train.Status.LeaseExpiresAt != nil {
+				t.Errorf("a/train is Pending but shows a lease end")
+			}
+			// train may not preempt render, which has a higher priority.
+			render := getClaim(ctx, clients["b"], "render")
+			if render.Status.Phase != claimsv1alpha1.ClaimBound || render.Status.DeviceName == victim {
+				t.Errorf("b/render = %s on %s, want Bound on the other A100", render.Status.Phase, render.Status.DeviceName)
+			}
+			return ctx
+		}).
+		Assess("claims in a and b race for the H100 and one wins", func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+			run(t, "", "docker", "rm", "-f", "solas-device-gpu-h100-1")
+			run(t, "", "docker", "run", "-d", "--name", "solas-device-gpu-h100-1", "--network", "solas-mesh", "solas-demo:dev", "device")
 			ip := strings.TrimSpace(run(t, "", "docker", "inspect", "-f",
-				`{{(index .NetworkSettings.Networks "solas-mesh").IPAddress}}`, "solas-device-gpu-1"))
+				`{{(index .NetworkSettings.Networks "solas-mesh").IPAddress}}`, "solas-device-gpu-h100-1"))
 			deviceURL = "http://" + ip + ":9000"
 			eventually(t, 30*time.Second, "gatekeeper up", func(context.Context) bool {
 				_, err := http.Get(deviceURL + "/log")
@@ -124,18 +215,19 @@ func TestMesh(t *testing.T) {
 				m := strings.NewReplacer("CLUSTER_ID", name, "DEVICE_URL", deviceURL).Replace(string(manifest))
 				run(t, m, "kubectl", "--kubeconfig", kubeconfig(name), "apply", "-f", "-")
 			}
-			eventually(t, 60*time.Second, "one claim Bound", func(ctx context.Context) bool {
-				return (phase(ctx, clients["a"]) == claimsv1alpha1.ClaimBound) != (phase(ctx, clients["b"]) == claimsv1alpha1.ClaimBound)
+			eventually(t, 60*time.Second, "one job claim Bound", func(ctx context.Context) bool {
+				return (phase(ctx, clients["a"], "job") == claimsv1alpha1.ClaimBound) !=
+					(phase(ctx, clients["b"], "job") == claimsv1alpha1.ClaimBound)
 			})
 			winner, loser = "a", "b"
-			if phase(ctx, clients["b"]) == claimsv1alpha1.ClaimBound {
+			if phase(ctx, clients["b"], "job") == claimsv1alpha1.ClaimBound {
 				winner, loser = "b", "a"
 			}
-			if h := holder(ctx, clients[loser]); h != winner+"/1" {
-				t.Fatalf("gpu-1 holder = %s, want %s/1", h, winner)
+			if h := holder(ctx, clients[loser], "gpu-h100-1"); h != winner+"/job/1" {
+				t.Fatalf("gpu-h100-1 holder = %s, want %s/job/1", h, winner)
 			}
 			time.Sleep(3 * time.Second)
-			if p := phase(ctx, clients[loser]); p != claimsv1alpha1.ClaimPending {
+			if p := phase(ctx, clients[loser], "job"); p != claimsv1alpha1.ClaimPending {
 				t.Fatalf("loser claim phase = %s, want Pending", p)
 			}
 			eventually(t, 30*time.Second, "winner uses the device", func(context.Context) bool {
@@ -147,11 +239,9 @@ func TestMesh(t *testing.T) {
 			oldUID = memberUID(ctx, clients[winner], winner)
 			node := "k3d-e2e-" + winner + "-server-0"
 			run(t, "", "docker", "pause", node)
-			eventually(t, 90*time.Second, "the loser's claim becomes Bound", func(ctx context.Context) bool {
-				return phase(ctx, clients[loser]) == claimsv1alpha1.ClaimBound
-			})
-			if h := holder(ctx, clients[loser]); h != loser+"/2" {
-				t.Fatalf("gpu-1 holder = %s, want %s/2", h, loser)
+			waitPhase(t, clients[loser], "job", claimsv1alpha1.ClaimBound, 90*time.Second)
+			if h := holder(ctx, clients[loser], "gpu-h100-1"); h != loser+"/job/2" {
+				t.Fatalf("gpu-h100-1 holder = %s, want %s/job/2", h, loser)
 			}
 			eventually(t, 30*time.Second, "the new holder uses the device", func(context.Context) bool {
 				return seen(deviceURL, loser, 2, true)
@@ -162,14 +252,12 @@ func TestMesh(t *testing.T) {
 			})
 			return ctx
 		}).
-		Assess("the old holder joins again and its claim is Lost", func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+		Assess("the old holder joins again and its claims are Lost", func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 			eventually(t, 90*time.Second, "new member UID", func(ctx context.Context) bool {
 				uid := memberUID(ctx, clients[winner], winner)
 				return uid != "" && uid != oldUID
 			})
-			eventually(t, 60*time.Second, "claim Lost", func(ctx context.Context) bool {
-				return phase(ctx, clients[winner]) == claimsv1alpha1.ClaimLost
-			})
+			waitPhase(t, clients[winner], "job", claimsv1alpha1.ClaimLost, 60*time.Second)
 			return ctx
 		}).
 		Feature()

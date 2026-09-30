@@ -1,0 +1,42 @@
+# The claims of cluster a. Each selects devices with labels, CEL, or
+# both. CEL sees the whole device as `device`, status included.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: work
+---
+apiVersion: claims.solas.dev/v1alpha1
+kind: DeviceClaim
+metadata:
+  name: train
+  namespace: work
+spec:
+  priority: 1
+  selector:
+    matchLabels: {kind: gpu}
+    cel: >-
+      device.spec.attributes.model == 'A100' &&
+      device.status.conditions.exists(c, c.type == 'Ready' && c.status == 'True')
+---
+apiVersion: claims.solas.dev/v1alpha1
+kind: DeviceClaim
+metadata:
+  name: infer
+  namespace: work
+spec:
+  priority: 0
+  selector:
+    cel: >-
+      int(device.spec.attributes.memoryGiB) <= 16 &&
+      device.status.conditions.exists(c, c.type == 'Ready' && c.status == 'True')
+---
+apiVersion: claims.solas.dev/v1alpha1
+kind: DeviceClaim
+metadata:
+  name: net
+  namespace: work
+spec:
+  priority: 0
+  selector:
+    matchLabels: {kind: nic}
+    cel: device.spec.attributes.speed == '400G'
