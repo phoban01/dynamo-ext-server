@@ -4,6 +4,11 @@
 # It needs kubectl to point at the target cluster.
 set -euo pipefail
 
+if ! command -v openssl >/dev/null; then
+  echo "gen-certs: openssl not found. Run through devbox, for example devbox run demo." >&2
+  exit 1
+fi
+
 ns=solas-system
 svc=solas
 dir=$(mktemp -d)
