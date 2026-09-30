@@ -266,22 +266,32 @@ Exit: `devbox run test` passes.
 
 Exit: `devbox run sim-gate` passes.
 
-### M7: Three-cluster demo and end-to-end tests
+### M7: Two-cluster demo and end-to-end tests
 
-- `demo/k3d/` scripts create three k3d clusters and one dynamodb-local
-  container on a shared Docker network. Each cluster comes up on its own
-  and joins through the table. The scripts install both components in
-  each cluster.
-- The demo shows four things. A device created in cluster A appears in B
-  and C. Claims in B and C race for one device, and only one wins. Cluster
-  B is deleted, and its device is freed and bound to C. Cluster B joins
-  again with a new member UID.
+- `demo/k3d/` scripts create two k3d clusters, `a` and `b`, and one
+  dynamodb-local container on a shared Docker network. Each cluster comes
+  up on its own and joins through the table. Three clusters ran the VM
+  out of memory, so the demo uses two.
+- The demo shows four things. A device created in `a` appears in `b`.
+  Claims in `a` and `b` race for one device, and only one wins. The
+  winner's node is paused past its lease; the other cluster reclaims the
+  device, and the device gatekeeper rejects the winner's stale fencing
+  token. The winner joins again with a new member UID, and its claim
+  becomes `Lost`.
 - `test/e2e/` uses `sigs.k8s.io/e2e-framework` with plain `testing`. It
   takes the e2e lock and deletes only clusters named `e2e-*`.
 
-Exit: `devbox run e2e` passes.
+Exit: `devbox run demo` and `devbox run e2e` pass.
 
-### M8: Model-based tests
+### M8: Pivot from etcd
+
+- `solas-pivot` moves Devices from an existing CRD in a cluster's etcd
+  into solas: `copy`, `verify`, and a mutating admission webhook for the
+  cutover. ADR 0010, spec section 9.
+
+Exit: `devbox run pivot-smoke` passes.
+
+### M9: Model-based tests
 
 - A Quint run exports ITF traces.
 - A Go driver replays each trace against a real `solas-apiserver` and the
@@ -290,7 +300,7 @@ Exit: `devbox run e2e` passes.
 
 Exit: the trace replay job passes in `devbox run e2e`.
 
-### M9: Confidence ladder
+### M10: Confidence ladder
 
 - `docs/confidence.md` lists each level of evidence: spec, Duvet
   coverage, Quint checks, negative models, unit tests, the simulator,
@@ -304,8 +314,8 @@ Exit: `devbox run verify` passes with the full Duvet gate.
 ## Order and parallel work
 
 M0 comes first. M1 blocks M2 to M5. M2 and M3 can run in parallel. M4
-needs M3. M5 needs M4. M6 needs M5. M7 needs M4 and M5. M8 needs M2 and
-M7. M9 closes the project.
+needs M3. M5 needs M4. M6 needs M5. M7 needs M4 and M5. M8 needs M4.
+M9 needs M2 and M7. M10 closes the project.
 
 Only one heavy job runs at a time on the development VM, as `CLAUDE.md`
 says. Two agents can work in parallel on code, but not on e2e or
@@ -320,7 +330,7 @@ says. Two agents can work in parallel on code, but not on e2e or
 - dynamodb-local may differ from DynamoDB in transaction or TTL behavior. The
   conformance tests should run against real DynamoDB at least once before
   any claim about production use.
-- Three k3d clusters and dynamodb-local use about 1.5 GB of memory. The
+- Two k3d clusters and dynamodb-local use about 1.5 GB of memory. The
   e2e lock and the one-heavy-job rule manage this.
 - Lease safety depends on a clock drift bound. The spec must state it,
   and the model must include drift.

@@ -45,12 +45,14 @@ by hand. `devbox.json` lists the packages and the scripts above.
 
 ## Local resources
 
-The development VM has 16 GB of memory. Running out of it kills the
+The development VM has 12 GB of memory. Running out of it kills the
 Claude Code session, so heavy jobs must not overlap.
 
 - devbox caps the Java heap at 3 GB (`JVM_ARGS` for Apalache,
   `JAVA_TOOL_OPTIONS` for TLC and other JVMs), Go package parallelism at
   four (`GOFLAGS=-p=4`), and the simulator gate at four shards.
+- Run at most two k3d clusters at once. Three clusters ran the VM out
+  of memory.
 - Run one heavy job at a time: a `quint verify`, a TLC run, an e2e run,
   or a race stress run. Do not start a second one in parallel.
 - `devbox run e2e` takes a lock, so a second run waits for the first.
@@ -91,6 +93,6 @@ filler, no marketing adjectives, no emoji.
 
 - `quint/` models; `scripts/quint-check.sh` positive and negative checks
 - `.duvet/config.toml` and `.duvet/snapshot.txt` traceability gate
-- `cmd/solas-apiserver/` the extension server; `demo/k3d/` three-cluster demo
+- `cmd/solas-apiserver/` the extension server; `demo/k3d/` two-cluster demo
 - `docs/confidence.md` the trust ladder; `docs/sim-gate.md` the simulator
 - `.github/workflows/verify.yml` and `sim-gate.yml` the CI gates
