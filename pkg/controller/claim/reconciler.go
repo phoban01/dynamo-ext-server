@@ -38,6 +38,9 @@ type Reconciler struct {
 	Member    MemberState
 	// Resync is how often a claim is checked again, for example D / 3.
 	Resync time.Duration
+	// Rand picks among free devices. Nil means a random seed. The simulator
+	// sets it so a run can be replayed.
+	Rand *rand.Rand
 
 	mu   sync.Mutex
 	rand *rand.Rand
@@ -339,6 +342,9 @@ func (r *Reconciler) listDevices(ctx context.Context) ([]solasv1alpha1.Device, e
 func (r *Reconciler) intN(n int) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.rand == nil && r.Rand != nil {
+		r.rand = r.Rand
+	}
 	if r.rand == nil {
 		r.rand = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	}

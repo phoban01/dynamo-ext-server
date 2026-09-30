@@ -99,3 +99,25 @@ func (r *Reconciler) Drained(ctx context.Context, uid types.UID) (bool, error) {
 	}
 	return true, nil
 }
+
+// MarkLost sets each Bound or Suspended claim of this cluster whose member
+// UID is not uid to Lost. The member manager calls it after a join, before
+// it counts itself live, spec 7.2.
+func (r *Reconciler) MarkLost(ctx context.Context, uid types.UID) error {
+	var claims claimsv1alpha1.DeviceClaimList
+	if err := r.Client.List(ctx, &claims); err != nil {
+		return err
+	}
+	for i := range claims.Items {
+		c := &claims.Items[i]
+		held := c.Status.Phase == claimsv1alpha1.ClaimBound || c.Status.Phase == claimsv1alpha1.ClaimSuspended
+		if !held || c.Status.MemberUID == uid {
+			continue
+		}
+		c.Status.Phase = claimsv1alpha1.ClaimLost
+		if err := r.Client.Status().Update(ctx, c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
