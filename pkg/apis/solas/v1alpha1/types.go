@@ -24,6 +24,16 @@ type DeviceSpec struct {
 	// Description holds free text about the device.
 	// +optional
 	Description string `json:"description,omitempty"`
+	// Attributes holds free-form metadata, for example vendor and model.
+	// +optional
+	Attributes map[string]string `json:"attributes,omitempty"`
+	// Preemptible lets a claim of higher priority take the device.
+	// +optional
+	Preemptible bool `json:"preemptible,omitempty"`
+	// PreemptionGracePeriodSeconds is how long a holder may keep the device
+	// after a preemption request. The default is 30.
+	// +optional
+	PreemptionGracePeriodSeconds *int32 `json:"preemptionGracePeriodSeconds,omitempty"`
 }
 
 // DeviceStatus shows which claim holds the device.
@@ -35,6 +45,24 @@ type DeviceStatus struct {
 	// on each bind and ignores the value a client sends.
 	// +optional
 	FencingToken int64 `json:"fencingToken,omitempty"`
+	// Preemption is a request of a claim of higher priority.
+	// +optional
+	Preemption *PreemptionRequest `json:"preemption,omitempty"`
+	// Conditions hold the health of the device. The party that runs the
+	// device sets them.
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// PreemptionRequest asks the holder to give up the device.
+type PreemptionRequest struct {
+	// Claim names the claim that asks, as a claimRef does.
+	Claim ClaimRef `json:"claim"`
+	// RequestedAt is when the claim asked, by its own clock. For display.
+	// +optional
+	RequestedAt *metav1.Time `json:"requestedAt,omitempty"`
 }
 
 // ClaimRef names the claim that holds a device.
@@ -49,6 +77,13 @@ type ClaimRef struct {
 	Name string `json:"name"`
 	// UID is the UID of the claim.
 	UID types.UID `json:"uid"`
+	// Priority is the priority of the claim.
+	// +optional
+	Priority int32 `json:"priority,omitempty"`
+	// BoundAt is when the bind happened, by the binder's clock. For
+	// display only.
+	// +optional
+	BoundAt *metav1.Time `json:"boundAt,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

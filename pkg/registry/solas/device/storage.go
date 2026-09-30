@@ -41,7 +41,7 @@ func NewREST(scheme *runtime.Scheme, optsGetter generic.RESTOptionsGetter) (*RES
 		DeleteStrategy:      strategy,
 		ResetFieldsStrategy: strategy,
 
-		TableConvertor: rest.NewDefaultTableConvertor(solas.Resource("devices")),
+		TableConvertor: tableConvertor{},
 	}
 	//= spec/solas.md#5-1-resource
 	//# The solas API server MUST serve `Device` from the table.

@@ -89,3 +89,79 @@ func TestMember(t *testing.T) {
 		t.Errorf("phase Gone: got %v, want 1 error", errs)
 	}
 }
+
+func preemptible(holder *solas.ClaimRef, req *solas.ClaimRef) *solas.Device {
+	d := device(holder)
+	d.Spec.Preemptible = true
+	if req != nil {
+		d.Status.Preemption = &solas.PreemptionRequest{Claim: *req}
+	}
+	return d
+}
+
+func withPrio(r *solas.ClaimRef, p int32) *solas.ClaimRef {
+	r.Priority = p
+	return r
+}
+
+//= spec/solas.md#10-5-preemption-request
+//= type=test
+//# The server MUST reject a request whose priority is not greater than the
+//# priority of the holder.
+
+//= spec/solas.md#10-5-preemption-request
+//= type=test
+//# The server MUST reject a request that replaces a request of equal or
+//# greater priority.
+
+func TestPreemptionRequest(t *testing.T) {
+	holder := withPrio(ref("c1"), 1)
+	tests := []struct {
+		name     string
+		old, new *solas.Device
+		wantErr  bool
+	}{
+		{"higher priority on a preemptible device", preemptible(holder, nil), preemptible(holder, withPrio(ref("c2"), 2)), false},
+		{"equal priority", preemptible(holder, nil), preemptible(holder, withPrio(ref("c2"), 1)), true},
+		{"not preemptible", device(holder), func() *solas.Device {
+			d := device(holder)
+			d.Status.Preemption = &solas.PreemptionRequest{Claim: *withPrio(ref("c2"), 5)}
+			return d
+		}(), true},
+		{"free device", preemptible(nil, nil), preemptible(nil, withPrio(ref("c2"), 5)), true},
+		{"replace with a higher request", preemptible(holder, withPrio(ref("c2"), 2)), preemptible(holder, withPrio(ref("c3"), 3)), false},
+		{"replace with an equal request", preemptible(holder, withPrio(ref("c2"), 2)), preemptible(holder, withPrio(ref("c3"), 2)), true},
+		{"withdraw a request", preemptible(holder, withPrio(ref("c2"), 2)), preemptible(holder, nil), false},
+	}
+	for _, tt := range tests {
+		errs := ValidateDeviceStatusUpdate(tt.new, tt.old)
+		if (len(errs) > 0) != tt.wantErr {
+			t.Errorf("%s: errors = %v, wantErr %v", tt.name, errs, tt.wantErr)
+		}
+	}
+}
+
+//= spec/solas.md#10-7-bind-by-the-preemptor
+//= type=test
+//# While a device has a request, the server MUST reject a bind that does not
+//# name the requesting claim.
+
+func TestReservedDevice(t *testing.T) {
+	req := withPrio(ref("c2"), 2)
+	old := preemptible(nil, req) // the holder released; the request stands
+	if errs := ValidateDeviceStatusUpdate(preemptible(withPrio(ref("c9"), 5), req), old); len(errs) == 0 {
+		t.Error("a claim other than the preemptor bound a kept device")
+	}
+	if errs := ValidateDeviceStatusUpdate(preemptible(req, req), old); len(errs) != 0 {
+		t.Errorf("the preemptor could not bind: %v", errs)
+	}
+}
+
+func TestBoundAtDoesNotChangeTheHolder(t *testing.T) {
+	old, d := device(ref("c1")), device(ref("c1"))
+	now := metav1.Now()
+	d.Status.ClaimRef.BoundAt = &now
+	if errs := ValidateDeviceStatusUpdate(d, old); len(errs) != 0 {
+		t.Errorf("a new bind time counted as a new holder: %v", errs)
+	}
+}

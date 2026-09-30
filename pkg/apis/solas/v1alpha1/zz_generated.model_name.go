@@ -51,3 +51,8 @@ func (in MemberSpec) OpenAPIModelName() string {
 func (in MemberStatus) OpenAPIModelName() string {
 	return "dev.solas.v1alpha1.MemberStatus"
 }
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in PreemptionRequest) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.PreemptionRequest"
+}

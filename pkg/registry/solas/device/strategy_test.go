@@ -109,3 +109,26 @@ func TestFencingToken(t *testing.T) {
 		t.Errorf("second bind: token %d, want 2", again.Status.FencingToken)
 	}
 }
+
+//= spec/solas.md#10-7-bind-by-the-preemptor
+//= type=test
+//# The bind of the requesting claim MUST clear `status.preemption`.
+
+func TestPreemptorBindClearsTheRequest(t *testing.T) {
+	ss := NewStatusStrategy(NewStrategy(runtime.NewScheme()))
+	req := *ref1
+	req.Name, req.UID, req.Priority = "c2", "u2", 5
+	old := dev("x", nil)
+	old.Spec.Preemptible = true
+	old.Status.FencingToken = 3
+	old.Status.Preemption = &solas.PreemptionRequest{Claim: req}
+	d := old.DeepCopy()
+	d.Status.ClaimRef = &req
+	ss.PrepareForUpdate(context.Background(), d, old)
+	if d.Status.Preemption != nil || d.Status.FencingToken != 4 {
+		t.Errorf("after the preemptor's bind: preemption %+v, token %d; want none and 4", d.Status.Preemption, d.Status.FencingToken)
+	}
+	if errs := ss.ValidateUpdate(context.Background(), d, old); len(errs) != 0 {
+		t.Errorf("validate: %v", errs)
+	}
+}

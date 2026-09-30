@@ -21,6 +21,13 @@ type Device struct {
 type DeviceSpec struct {
 	// Description holds free text about the device.
 	Description string
+	// Attributes holds free-form metadata, spec 10.1.
+	Attributes map[string]string
+	// Preemptible lets a claim of higher priority take the device, spec 10.5.
+	Preemptible bool
+	// PreemptionGracePeriodSeconds is how long a holder may keep the device
+	// after a preemption request. The default is 30.
+	PreemptionGracePeriodSeconds *int32
 }
 
 // DeviceStatus shows which claim holds the device.
@@ -30,6 +37,18 @@ type DeviceStatus struct {
 	// FencingToken is the fencing token of the last bind. The server sets
 	// it, spec 5.3.
 	FencingToken int64
+	// Preemption is a request of a claim of higher priority, spec 10.5.
+	Preemption *PreemptionRequest
+	// Conditions hold the health of the device, spec 10.1.
+	Conditions []metav1.Condition
+}
+
+// PreemptionRequest asks the holder to give up the device, spec 10.5.
+type PreemptionRequest struct {
+	// Claim names the claim that asks, as a claimRef does.
+	Claim ClaimRef
+	// RequestedAt is when the claim asked, by its own clock. For display.
+	RequestedAt *metav1.Time
 }
 
 // ClaimRef names the claim that holds a device, spec 5.2.
@@ -44,6 +63,11 @@ type ClaimRef struct {
 	Name string
 	// UID is the UID of the claim.
 	UID types.UID
+	// Priority is the priority of the claim, spec 10.2.
+	Priority int32
+	// BoundAt is when the bind happened, by the binder's clock. For
+	// display only.
+	BoundAt *metav1.Time
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
