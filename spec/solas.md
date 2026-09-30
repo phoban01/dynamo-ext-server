@@ -640,6 +640,8 @@ match.
 The controller SHOULD set `DeviceClaim.status.leaseExpiresAt` on each
 `Bound` claim to the end of its member's lease, `S + D - M`, as a wall
 time by the holder's clock.
+The controller SHOULD clear it when the claim becomes `Pending`,
+`Suspended`, or `Lost`.
 No component MUST use `leaseExpiresAt` for any decision.
 
 ### 10.5. Preemption request

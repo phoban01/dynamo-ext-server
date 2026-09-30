@@ -22,7 +22,7 @@ spec:
         - {name: Device, type: string, jsonPath: .status.deviceName}
         - {name: Priority, type: integer, jsonPath: .spec.priority}
         - {name: Token, type: integer, jsonPath: .status.fencingToken}
-        - {name: Expires, type: date, jsonPath: .status.leaseExpiresAt}
+        - {name: Expires, type: string, jsonPath: .status.leaseExpiresAt}
         - {name: Age, type: date, jsonPath: .metadata.creationTimestamp}
       schema:
         openAPIV3Schema:

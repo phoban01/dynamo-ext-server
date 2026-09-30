@@ -384,6 +384,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!SHOULD,implementation]: The controller SHOULD set `DeviceClaim.status.leaseExpiresAt` on each
     TEXT[!SHOULD,implementation]: `Bound` claim to the end of its member's lease, `S + D - M`, as a wall
     TEXT[!SHOULD,implementation]: time by the holder's clock.
+    TEXT[!SHOULD,implementation,test]: The controller SHOULD clear it when the claim becomes `Pending`,
+    TEXT[!SHOULD,implementation,test]: `Suspended`, or `Lost`.
     TEXT[!MUST]: No component MUST use `leaseExpiresAt` for any decision.
 
   SECTION: [10.5. Preemption request](#10-5-preemption-request)

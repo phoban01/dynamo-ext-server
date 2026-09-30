@@ -437,6 +437,11 @@ func TestInvalidCELNeverBinds(t *testing.T) {
 	}
 }
 
+//= spec/solas.md#10-4-lease-display
+//= type=test
+//# The controller SHOULD clear it when the claim becomes `Pending`,
+//# `Suspended`, or `Lost`.
+
 func TestLeaseExpiresAtIsShown(t *testing.T) {
 	c1 := claim("c1", "u1")
 	k := fakekube.NewClient(device("d1", nil, nil), c1)
@@ -450,6 +455,13 @@ func TestLeaseExpiresAtIsShown(t *testing.T) {
 	}
 	if got := getClaim(t, k, "c1").Status.LeaseExpiresAt; got == nil || !got.Time.Equal(time.Unix(5000, 0)) {
 		t.Errorf("leaseExpiresAt = %v, want 5000", got)
+	}
+
+	// The lease lapses: the claim is Suspended and shows no lease end.
+	m.st.Live = false
+	settle(t, r, c1)
+	if got := getClaim(t, k, "c1").Status; got.Phase != claimsv1alpha1.ClaimSuspended || got.LeaseExpiresAt != nil {
+		t.Errorf("claim status = %+v, want Suspended with no leaseExpiresAt", got)
 	}
 }
 

@@ -156,7 +156,7 @@ func (r *Reconciler) preemptionStep(ctx context.Context, claim *claimsv1alpha1.D
 		}
 		//= spec/solas.md#10-6-release-by-the-holder
 		//# The controller MUST then set the claim back to `Pending`.
-		claim.Status.Phase = claimsv1alpha1.ClaimPending
+		setPhase(claim, claimsv1alpha1.ClaimPending)
 		claim.Status.DeviceName = ""
 		claim.Status.PreemptionSeenAt = nil
 		meta.SetStatusCondition(&claim.Status.Conditions, metav1.Condition{

@@ -251,7 +251,7 @@ func (r *Reconciler) held(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 		//= spec/solas.md#6-5-phases
 		//# When the controller finds that its member UID changed, it MUST set each
 		//# claim with the old `status.memberUID` to `Lost`.
-		claim.Status.Phase = claimsv1alpha1.ClaimLost
+		setPhase(claim, claimsv1alpha1.ClaimLost)
 		return reconcile.Result{}, ignoreConflict(r.Client.Status().Update(ctx, claim))
 	}
 
@@ -317,7 +317,7 @@ func (r *Reconciler) held(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 		//= spec/solas.md#7-6-leave
 		//# The member MUST then set each `Bound` claim to `Suspended`.
 		if !st.Live || st.Draining {
-			claim.Status.Phase = claimsv1alpha1.ClaimSuspended
+			setPhase(claim, claimsv1alpha1.ClaimSuspended)
 			claim.Status.PreemptionSeenAt = nil
 			return reconcile.Result{Requeue: true}, ignoreConflict(r.Client.Status().Update(ctx, claim))
 		}
@@ -450,4 +450,14 @@ func absDuration(d time.Duration) time.Duration {
 func ptrTime(t time.Time) *metav1.Time {
 	mt := metav1.NewTime(t)
 	return &mt
+}
+
+//= spec/solas.md#10-4-lease-display
+//# The controller SHOULD clear it when the claim becomes `Pending`,
+//# `Suspended`, or `Lost`.
+
+// setPhase sets the phase of a claim that leaves Bound or Preempting.
+func setPhase(claim *claimsv1alpha1.DeviceClaim, p claimsv1alpha1.ClaimPhase) {
+	claim.Status.Phase = p
+	claim.Status.LeaseExpiresAt = nil
 }

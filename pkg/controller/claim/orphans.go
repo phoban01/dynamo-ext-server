@@ -144,7 +144,7 @@ func (r *Reconciler) MarkLost(ctx context.Context, uid types.UID) error {
 		if !held || c.Status.MemberUID == uid {
 			continue
 		}
-		c.Status.Phase = claimsv1alpha1.ClaimLost
+		setPhase(c, claimsv1alpha1.ClaimLost)
 		if err := r.Client.Status().Update(ctx, c); err != nil {
 			return err
 		}
