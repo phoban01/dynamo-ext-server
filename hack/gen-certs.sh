@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Makes a CA and a serving certificate for solas-apiserver, stores them in
-# the Secret solas-apiserver-tls, and sets the caBundle of the APIService.
+# Makes a CA and a serving certificate for solas, stores them in
+# the Secret solas-tls, and sets the caBundle of the APIService.
 # It needs kubectl to point at the target cluster.
 set -euo pipefail
 
 ns=solas-system
-svc=solas-apiserver
+svc=solas
 dir=$(mktemp -d)
 trap 'rm -rf "$dir"' EXIT
 
@@ -17,7 +17,7 @@ printf 'subjectAltName=DNS:%s,DNS:%s.%s,DNS:%s.%s.svc\n' "$svc" "$svc" "$ns" "$s
 openssl x509 -req -in "$dir/tls.csr" -CA "$dir/ca.crt" -CAkey "$dir/ca.key" \
   -CAcreateserial -days 365 -extfile "$dir/ext.cnf" -out "$dir/tls.crt" 2>/dev/null
 
-kubectl -n "$ns" create secret tls solas-apiserver-tls \
+kubectl -n "$ns" create secret tls solas-tls \
   --cert="$dir/tls.crt" --key="$dir/tls.key" --dry-run=client -o yaml | kubectl apply -f -
 bundle=$(base64 <"$dir/ca.crt" | tr -d '\n')
 kubectl patch apiservice v1alpha1.solas.dev --type merge -p "{\"spec\":{\"caBundle\":\"$bundle\"}}"

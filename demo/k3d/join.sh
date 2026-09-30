@@ -23,26 +23,11 @@ k3d kubeconfig get "$cluster" >"$kube"
 export KUBECONFIG="$root/$kube"
 
 say "load images"
-image_import "$cluster" solas-apiserver:dev solas-controller:dev solas-demo:dev
+image_import "$cluster" solas:dev solas-demo:dev
 
-say "deploy solas-apiserver, table $endpoint"
-kubectl apply -f deploy/apiserver/namespace.yaml >/dev/null
-kubectl -n solas-system create secret generic solas-dynamodb --dry-run=client -o yaml \
-  --from-literal=endpoint="$endpoint" \
-  --from-literal=accessKeyID=local --from-literal=secretAccessKey=local | kubectl apply -f - >/dev/null
-kubectl apply -f deploy/apiserver/ >/dev/null
-hack/gen-certs.sh >/dev/null
-kubectl -n solas-system rollout status deploy/solas-apiserver --timeout=180s >/dev/null
-kubectl wait --for=condition=Available apiservice/v1alpha1.solas.dev --timeout=120s >/dev/null
-
-say "deploy solas-controller as member $name"
-kubectl -n solas-system create configmap solas-member --dry-run=client -o yaml \
-  --from-literal=clusterID="$name" --from-literal=leaseDuration=10s \
-  --from-literal=leaseMargin=1s --from-literal=sweepInterval=3s | kubectl apply -f - >/dev/null
-kubectl apply -f deploy/controller/crd.yaml >/dev/null
-kubectl wait --for=condition=Established crd/deviceclaims.claims.solas.dev --timeout=60s >/dev/null
-kubectl apply -f deploy/controller/rbac.yaml -f deploy/controller/deployment.yaml >/dev/null
-kubectl -n solas-system rollout status deploy/solas-controller --timeout=120s >/dev/null
+say "install solas as member $name, table $endpoint"
+# A short lease, so the demo scenes take seconds.
+solas_install "$name" "$endpoint" 10s 1s 3s
 for _ in $(seq 60); do
   kubectl get member "$name" >/dev/null 2>&1 && break
   sleep 1

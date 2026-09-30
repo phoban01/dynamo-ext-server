@@ -1,6 +1,6 @@
 # Model-based tests
 
-The model-based tests check that the real solas-apiserver behaves as the
+The model-based tests check that the real solas API server behaves as the
 Quint model says it does. They replay traces of `quint/solas.qnt` against
 the real Device and Member REST stores, on dynamodb-local.
 

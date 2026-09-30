@@ -1,14 +1,31 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: solas-controller
+  name: solas
   namespace: solas-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: solas-controller
+  name: solas
 rules:
+  # The API server part reads these for admission and flow control.
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources:
+      - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+      - validatingadmissionpolicies
+      - validatingadmissionpolicybindings
+      - mutatingadmissionpolicies
+      - mutatingadmissionpolicybindings
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["flowcontrol.apiserver.k8s.io"]
+    resources: ["prioritylevelconfigurations", "flowschemas"]
+    verbs: ["list", "watch"]
+  # The controller part reads and writes these.
   - apiGroups: ["claims.solas.dev"]
     resources: ["deviceclaims"]
     verbs: ["get", "list", "watch", "update", "patch"]
@@ -34,21 +51,50 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: solas-controller
+  name: solas
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: solas-controller
+  name: solas
 subjects:
   - kind: ServiceAccount
-    name: solas-controller
+    name: solas
     namespace: solas-system
 ---
-# The leader election lease lives in this cluster, spec 6.2.
+# Delegated authentication and authorization to the kube-apiserver.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: solas:system:auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: solas
+    namespace: solas-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: solas-auth-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - kind: ServiceAccount
+    name: solas
+    namespace: solas-system
+---
+# The leader election lease of the controller part lives in this
+# cluster, spec 6.2.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: solas-controller-leader-election
+  name: solas-leader-election
   namespace: solas-system
 rules:
   - apiGroups: ["coordination.k8s.io"]
@@ -61,13 +107,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: solas-controller-leader-election
+  name: solas-leader-election
   namespace: solas-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: solas-controller-leader-election
+  name: solas-leader-election
 subjects:
   - kind: ServiceAccount
-    name: solas-controller
+    name: solas
     namespace: solas-system

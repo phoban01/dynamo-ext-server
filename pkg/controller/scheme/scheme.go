@@ -1,4 +1,4 @@
-// Package scheme holds the types that solas-controller reads and writes.
+// Package scheme holds the types that the controller part of solas reads and writes.
 package scheme
 
 import (

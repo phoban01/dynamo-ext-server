@@ -41,13 +41,11 @@ expect_fail() {
 step "create cluster and deploy solas"
 cluster_create "$cluster" "$KUBECONFIG"
 scripts/images.sh >/dev/null
-image_import "$cluster" solas-apiserver:dev solas-pivot:dev
-kubectl apply -f deploy/apiserver/namespace.yaml >/dev/null
+image_import "$cluster" solas:dev solas-pivot:dev
+kubectl apply -f deploy/solas/namespace.yaml >/dev/null
 kubectl apply -f deploy/dynamodb-local/ >/dev/null
-kubectl apply -f deploy/apiserver/ >/dev/null
-hack/gen-certs.sh >/dev/null
-kubectl -n solas-system rollout status deploy/dynamodb-local deploy/solas-apiserver --timeout=180s >/dev/null
-kubectl wait --for=condition=Available apiservice/v1alpha1.solas.dev --timeout=120s >/dev/null
+kubectl -n solas-system rollout status deploy/dynamodb-local --timeout=180s >/dev/null
+solas_install pivot http://dynamodb-local.solas-system.svc:8000
 
 step "the old CRD holds two devices in etcd"
 kubectl apply -f deploy/pivot/example/crd.yaml >/dev/null
@@ -95,8 +93,17 @@ kubectl delete devices.inventory.example.com gpu-old-3 >/dev/null
 ! kubectl get devices.solas.dev gpu-old-3 >/dev/null 2>&1
 
 step "a delete of an old device whose solas Device is bound is denied"
-kubectl patch devices.solas.dev gpu-old-1 --subresource=status --type=merge \
-  -p '{"status":{"claimRef":{"member":"a","memberUID":"m1","namespace":"ns","name":"job","uid":"u1"}}}' >/dev/null
+# The claimRef names a real Member, so the sweeper of member pivot leaves
+# it alone for the lease of 30s.
+kubectl apply -f - >/dev/null <<YAML
+apiVersion: solas.dev/v1alpha1
+kind: Member
+metadata:
+  name: cluster-a
+YAML
+uid_a=$(kubectl get member cluster-a -o jsonpath='{.metadata.uid}')
+kubectl patch devices.solas.dev gpu-old-1 --subresource=status --type=merge -p \
+  "{\"status\":{\"claimRef\":{\"member\":\"cluster-a\",\"memberUID\":\"$uid_a\",\"namespace\":\"ns\",\"name\":\"job\",\"uid\":\"u1\"}}}" >/dev/null
 expect_fail "delete old gpu-old-1 while bound" kubectl delete devices.inventory.example.com gpu-old-1
 kubectl get devices.inventory.example.com gpu-old-1 >/dev/null
 

@@ -29,6 +29,10 @@ Each member cluster runs two things:
 2. `solas-controller`, a controller manager. It runs the claim controller,
    the membership heartbeat, and the reclaim sweeper.
 
+ADR 0012 later put both parts in one binary, `solas`, and one Deployment,
+`deploy/solas`. The API server part runs on every replica. The
+controller part runs on the leader.
+
 All clusters point at the same DynamoDB table. The demo uses one dynamodb-local
 container for this table.
 

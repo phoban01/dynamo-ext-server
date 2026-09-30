@@ -1,5 +1,6 @@
 # Settings of this member cluster. Each cluster sets its own clusterID.
-# The defaults are D = 30s and M = D / 10, spec 7.3 and 7.5.
+# The defaults are D = 30s and M = D / 10, spec 7.3 and 7.5. Create this
+# ConfigMap before the Deployment, because the Pod reads it at start.
 apiVersion: v1
 kind: ConfigMap
 metadata:

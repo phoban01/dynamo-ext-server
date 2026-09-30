@@ -71,3 +71,24 @@ image_import() {
   echo "image import: ${missing[*]} not loaded into $cluster" >&2
   return 1
 }
+
+# solas_install <cluster-id> <table endpoint> [lease] [margin] [sweep]
+# installs solas from deploy/solas into the cluster that KUBECONFIG names,
+# and waits until the cluster serves the solas API. The ConfigMap and the
+# Secret come first, because the Pod reads them at start.
+solas_install() {
+  local id=$1 endpoint=$2 lease=${3:-30s} margin=${4:-3s} sweep=${5:-10s}
+  kubectl apply -f deploy/solas/namespace.yaml >/dev/null
+  kubectl -n solas-system create secret generic solas-dynamodb --dry-run=client -o yaml \
+    --from-literal=endpoint="$endpoint" \
+    --from-literal=accessKeyID=local --from-literal=secretAccessKey=local | kubectl apply -f - >/dev/null
+  kubectl -n solas-system create configmap solas-member --dry-run=client -o yaml \
+    --from-literal=clusterID="$id" --from-literal=leaseDuration="$lease" \
+    --from-literal=leaseMargin="$margin" --from-literal=sweepInterval="$sweep" | kubectl apply -f - >/dev/null
+  kubectl apply -f deploy/solas/crd.yaml >/dev/null
+  kubectl wait --for=condition=Established crd/deviceclaims.claims.solas.dev --timeout=60s >/dev/null
+  kubectl apply -f deploy/solas/ >/dev/null
+  hack/gen-certs.sh >/dev/null
+  kubectl -n solas-system rollout status deploy/solas --timeout=180s >/dev/null
+  kubectl wait --for=condition=Available apiservice/v1alpha1.solas.dev --timeout=120s >/dev/null
+}

@@ -1,6 +1,6 @@
 # ADR 0012: One solas binary and one Deployment
 
-Status: proposed
+Status: accepted
 
 ## Context
 
