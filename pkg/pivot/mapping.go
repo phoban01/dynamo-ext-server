@@ -9,7 +9,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 
 	solasv1alpha1 "github.com/phoban01/solas/pkg/apis/solas/v1alpha1"
 )
@@ -44,11 +43,11 @@ func ParseSource(gvr, descriptionPath string) (Source, error) {
 
 //= spec/solas.md#9-1-mapping
 //# The Device MUST have the annotation `solas.dev/pivoted-from`, set to the
-//# group, the resource, and the UID of the old object.
+//# group, the resource, the namespace, and the name of the old object.
 
-// Ref is the value of solas.dev/pivoted-from for the old object uid.
-func (s Source) Ref(uid types.UID) string {
-	return s.Resource.Group + "/" + s.Resource.Resource + "/" + string(uid)
+// Ref is the value of solas.dev/pivoted-from for an old object.
+func (s Source) Ref(namespace, name string) string {
+	return s.Resource.Group + "/" + s.Resource.Resource + "/" + namespace + "/" + name
 }
 
 //= spec/solas.md#9-1-mapping
@@ -79,7 +78,7 @@ func ToDevice(old *unstructured.Unstructured, src Source) (*solasv1alpha1.Device
 			d.Annotations[k] = v
 		}
 	}
-	d.Annotations[AnnotationPivotedFrom] = src.Ref(old.GetUID())
+	d.Annotations[AnnotationPivotedFrom] = src.Ref(old.GetNamespace(), old.GetName())
 
 	//= spec/solas.md#9-1-mapping
 	//# The Device MUST get its description from a field of the old object that

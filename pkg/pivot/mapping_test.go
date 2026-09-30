@@ -54,7 +54,7 @@ func TestToDevice(t *testing.T) {
 	if _, ok := d.Annotations[lastApplied]; ok {
 		t.Error("the kubectl last-applied annotation was copied")
 	}
-	if got := d.Annotations[AnnotationPivotedFrom]; got != "inventory.example.com/devices/u1" {
+	if got := d.Annotations[AnnotationPivotedFrom]; got != "inventory.example.com/devices//gpu-1" {
 		t.Errorf("pivoted-from = %q", got)
 	}
 	if d.Status.ClaimRef != nil || d.Status.FencingToken != 0 {

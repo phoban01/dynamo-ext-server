@@ -307,32 +307,32 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: The sweeper MUST run at least once every `D`.
 
   SECTION: [9.1. Mapping](#9-1-mapping)
-    TEXT[!MUST]: The old object and its Device MUST have the same name.
-    TEXT[!MUST]: The Device MUST get the labels of the old object.
-    TEXT[!MUST]: The Device MUST get the annotations of the old object, except
-    TEXT[!MUST]: `kubectl.kubernetes.io/last-applied-configuration`.
-    TEXT[!MUST]: The Device MUST get its description from a field of the old object that
-    TEXT[!MUST]: the pivot names.
-    TEXT[!MUST]: The pivot MUST NOT copy the status of the old object.
-    TEXT[!MUST]: The Device MUST have the annotation `solas.dev/pivoted-from`, set to the
-    TEXT[!MUST]: group, the resource, and the UID of the old object.
-    TEXT[!MUST]: The old object MUST have the annotation `solas.dev/pivoted-to`, set to
-    TEXT[!MUST]: `solas.dev/devices/` and the name.
+    TEXT[!MUST,implementation]: The old object and its Device MUST have the same name.
+    TEXT[!MUST,implementation]: The Device MUST get the labels of the old object.
+    TEXT[!MUST,implementation,test]: The Device MUST get the annotations of the old object, except
+    TEXT[!MUST,implementation,test]: `kubectl.kubernetes.io/last-applied-configuration`.
+    TEXT[!MUST,implementation]: The Device MUST get its description from a field of the old object that
+    TEXT[!MUST,implementation]: the pivot names.
+    TEXT[!MUST,implementation,test]: The pivot MUST NOT copy the status of the old object.
+    TEXT[!MUST,implementation]: The Device MUST have the annotation `solas.dev/pivoted-from`, set to the
+    TEXT[!MUST,implementation]: group, the resource, the namespace, and the name of the old object.
+    TEXT[!MUST,implementation]: The old object MUST have the annotation `solas.dev/pivoted-to`, set to
+    TEXT[!MUST,implementation]: `solas.dev/devices/` and the name.
 
   SECTION: [9.2. Copy](#9-2-copy)
-    TEXT[!MUST]: The copy MUST create the Device when it does not exist.
-    TEXT[!MUST]: The copy MUST update the Device when its `solas.dev/pivoted-from` names
-    TEXT[!MUST]: the old object.
-    TEXT[!MUST]: The copy MUST NOT change a Device whose `solas.dev/pivoted-from` is not
-    TEXT[!MUST]: set or names another object.
-    TEXT[!MUST]: It MUST report each such Device as a conflict.
-    TEXT[!MUST]: Running the copy twice MUST give the same result as running it once.
-    TEXT[!MUST]: With `--dry-run`, the copy MUST NOT write.
+    TEXT[!MUST,implementation]: The copy MUST create the Device when it does not exist.
+    TEXT[!MUST,implementation]: The copy MUST update the Device when its `solas.dev/pivoted-from` names
+    TEXT[!MUST,implementation]: the old object.
+    TEXT[!MUST,implementation,test]: The copy MUST NOT change a Device whose `solas.dev/pivoted-from` is not
+    TEXT[!MUST,implementation,test]: set or names another object.
+    TEXT[!MUST,implementation]: It MUST report each such Device as a conflict.
+    TEXT[!MUST,implementation,test]: Running the copy twice MUST give the same result as running it once.
+    TEXT[!MUST,implementation,test]: With `--dry-run`, the copy MUST NOT write.
 
   SECTION: [9.3. Verify](#9-3-verify)
-    TEXT[!MUST]: The verify MUST check that each old object has a Device.
-    TEXT[!MUST]: It MUST check that the Device names the old object, and that the labels
-    TEXT[!MUST]: and the description match.
+    TEXT[!MUST,implementation]: The verify MUST check that each old object has a Device.
+    TEXT[!MUST,implementation,test]: It MUST check that the Device names the old object, and that the labels
+    TEXT[!MUST,implementation,test]: and the description match.
     TEXT[!MUST]: It MUST exit with a status other than 0 when any check fails.
 
   SECTION: [9.4. Webhook](#9-4-webhook)

@@ -554,7 +554,9 @@ the pivot names.
 The pivot MUST NOT copy the status of the old object.
 A pivoted device starts free.
 The Device MUST have the annotation `solas.dev/pivoted-from`, set to the
-group, the resource, and the UID of the old object.
+group, the resource, the namespace, and the name of the old object.
+It names the object, not its UID, because a webhook sees a new object
+before the API server gives it a UID.
 The old object MUST have the annotation `solas.dev/pivoted-to`, set to
 `solas.dev/devices/` and the name.
 
