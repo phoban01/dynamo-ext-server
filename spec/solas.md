@@ -310,6 +310,11 @@ If a device in that list has a `claimRef` with the claim UID and the UID
 of the member's current `Member`, the controller MUST adopt that device
 and MUST NOT bind another.
 This covers a crash after the device write and before the claim write.
+Before it adopts a device, the controller MUST read the device again with
+a consistent read.
+It MUST adopt the device only if that read still shows the same `claimRef`.
+A list can be older than the last release of the claim, spec 10.6, and
+adopt makes no write that the server can reject.
 The controller MUST NOT adopt a device whose `claimRef` has an older
 member UID.
 A bind from an old member identity can land after a rejoin.
@@ -433,6 +438,8 @@ After a join, the controller MUST set each claim with another
 `status.memberUID` to `Lost` before it treats itself as live.
 Otherwise a claim can look `Bound` for a moment under a member that has
 lost its device.
+This MUST include `Preempting` and `Preempted` claims, because they still
+hold a device.
 
 ### 7.3. Renew
 

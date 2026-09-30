@@ -132,7 +132,7 @@ func (r *Reconciler) bind(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 	//# member UID.
 	for i := range devices {
 		if ref := devices[i].Status.ClaimRef; ref != nil && ref.UID == claim.UID && ref.MemberUID == st.UID {
-			return r.setBound(ctx, claim, &devices[i], st.UID)
+			return r.adopt(ctx, claim, devices[i].Name, st.UID)
 		}
 	}
 
@@ -199,6 +199,29 @@ func (r *Reconciler) bind(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 	//
 	// The bind above carried st.UID, and setBound records the same UID.
 	return r.setBound(ctx, claim, d, st.UID)
+}
+
+//= spec/solas.md#6-3-bind
+//# Before it adopts a device, the controller MUST read the device again with
+//# a consistent read.
+
+//= spec/solas.md#6-3-bind
+//# It MUST adopt the device only if that read still shows the same `claimRef`.
+
+// adopt sets the claim Bound on a device that a list showed naming it. The
+// list can be late, so adopt reads the device again first.
+func (r *Reconciler) adopt(ctx context.Context, claim *claimsv1alpha1.DeviceClaim, name string, uid types.UID) (reconcile.Result, error) {
+	var d solasv1alpha1.Device
+	if err := r.Reader.Get(ctx, client.ObjectKey{Name: name}, &d); err != nil {
+		if apierrors.IsNotFound(err) {
+			return reconcile.Result{Requeue: true}, nil
+		}
+		return reconcile.Result{}, err
+	}
+	if ref := d.Status.ClaimRef; ref == nil || ref.UID != claim.UID || ref.MemberUID != uid {
+		return reconcile.Result{Requeue: true}, nil
+	}
+	return r.setBound(ctx, claim, &d, uid)
 }
 
 func (r *Reconciler) setBound(ctx context.Context, claim *claimsv1alpha1.DeviceClaim, d *solasv1alpha1.Device, uid types.UID) (reconcile.Result, error) {

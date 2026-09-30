@@ -209,6 +209,38 @@ func TestAdoptOnlyWithTheCurrentMemberUID(t *testing.T) {
 	}
 }
 
+//= spec/solas.md#6-3-bind
+//= type=test
+//# It MUST adopt the device only if that read still shows the same `claimRef`.
+
+func TestNoAdoptFromALateList(t *testing.T) {
+	ctx := context.Background()
+	c1 := claim("c1", "u1")
+	c1.Finalizers = []string{claimsv1alpha1.ReleaseFinalizer}
+	c1.Status.Phase = claimsv1alpha1.ClaimPending
+	k := fakekube.NewClient(device("d1", nil, refTo(c1, muid)), c1)
+
+	var before solasv1alpha1.DeviceList
+	if err := k.List(ctx, &before); err != nil {
+		t.Fatal(err)
+	}
+	// c1 released d1 after the list, as a preempted holder does.
+	d1 := getDevice(t, k, "d1")
+	d1.Status.ClaimRef = nil
+	if err := k.Status().Update(ctx, d1); err != nil {
+		t.Fatal(err)
+	}
+
+	r := newReconciler(k, live())
+	r.Reader = staleReader{Reader: k, devices: before}
+	if _, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(c1)}); err != nil {
+		t.Fatal(err)
+	}
+	if p := getClaim(t, k, "c1").Status.Phase; p != claimsv1alpha1.ClaimPending {
+		t.Errorf("c1 phase = %s, want Pending: it adopted a device that no longer names it", p)
+	}
+}
+
 func TestDuplicateDeviceIsReleased(t *testing.T) {
 	c1 := claim("c1", "u1")
 	c1.Finalizers = []string{claimsv1alpha1.ReleaseFinalizer}
@@ -418,5 +450,40 @@ func TestLeaseExpiresAtIsShown(t *testing.T) {
 	}
 	if got := getClaim(t, k, "c1").Status.LeaseExpiresAt; got == nil || !got.Time.Equal(time.Unix(5000, 0)) {
 		t.Errorf("leaseExpiresAt = %v, want 5000", got)
+	}
+}
+
+//= spec/solas.md#7-2-join
+//= type=test
+//# This MUST include `Preempting` and `Preempted` claims, because they still
+//# hold a device.
+
+func TestMarkLostCoversEveryHeldPhase(t *testing.T) {
+	phases := map[string]claimsv1alpha1.ClaimPhase{
+		"bound":      claimsv1alpha1.ClaimBound,
+		"suspended":  claimsv1alpha1.ClaimSuspended,
+		"preempting": claimsv1alpha1.ClaimPreempting,
+		"preempted":  claimsv1alpha1.ClaimPreempted,
+		"pending":    claimsv1alpha1.ClaimPending,
+	}
+	var objs []client.Object
+	for name, p := range phases {
+		c := claim(name, types.UID("u-"+name))
+		c.Status.Phase = p
+		c.Status.MemberUID = "old-uid"
+		objs = append(objs, c)
+	}
+	k := fakekube.NewClient(objs...)
+	if err := newReconciler(k, live()).MarkLost(context.Background(), muid); err != nil {
+		t.Fatal(err)
+	}
+	for name, p := range phases {
+		want := claimsv1alpha1.ClaimLost
+		if p == claimsv1alpha1.ClaimPending {
+			want = p
+		}
+		if got := getClaim(t, k, name).Status.Phase; got != want {
+			t.Errorf("%s: phase = %s, want %s", name, got, want)
+		}
 	}
 }

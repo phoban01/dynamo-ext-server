@@ -207,13 +207,13 @@ module solas {
     | Free => true
   }
 
-  // Claims of cluster c that were bound under another member UID become
-  // Lost, spec 6.5.
+  // Claims of cluster c that hold a device under another member UID become
+  // Lost, spec 6.5. A Preempting or Preempted claim still holds its device.
   def markLost(c: str, uid: int): str -> Claim =
     s.claims.keys().mapBy(k => {
       val cm = s.claims.get(k)
       if (CFG.owner.get(k) == c
-          and (cm.phase == "Bound" or cm.phase == "Suspended")
+          and cm.phase.in(Set("Bound", "Suspended", "Preempting", "Preempted"))
           and cm.muid != uid)
         { ...cm, phase: "Lost" }
       else cm
@@ -1138,4 +1138,24 @@ module solas2 {
       .then(bindLand({ cluster: "b", claim: "b1", dev: "d1", rv: 4, muid: 2 }))
       .then(adopt("b1", "d1"))
       .expect(s.claims.get("b1").phase == "Bound" and s.claims.get("b1").token == 2 and safety)
+
+  // a2 is Preempting when a crashes. b's sweeper frees d1. When a comes
+  // back, a2 is Lost, as a Bound claim would be. The simulator found this
+  // case.
+  run preemptingLostTest =
+    allHeld
+      .then(requestPreemption("b1", "d1"))
+      .then(seePreemption("a2"))
+      .then(observe("b", "a"))
+      .then(crash("a"))
+      .then(tickBy(fastB))
+      .then(tickBy(fastB))
+      .then(tickBy(fastB))
+      .then(sweepDelete("b", "a"))
+      .then(sweepListDevices("b"))
+      .then(sweepListMembers("b"))
+      .then(sweepClear("b", "d1"))
+      .then(recover("a"))
+      .then(join("a"))
+      .expect(safety and s.claims.get("a2").phase == "Lost")
 }
