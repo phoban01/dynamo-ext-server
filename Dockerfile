@@ -1,6 +1,8 @@
 # Builds the solas image, and the demo and pivot images. Pick one with
 # --target.
-FROM golang:1.26 AS build
+# The build stage runs on the build platform and cross-compiles, so a
+# multi-platform build needs no emulation.
+FROM --platform=$BUILDPLATFORM golang:1.26 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

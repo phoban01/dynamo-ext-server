@@ -1,0 +1,46 @@
+name: release
+
+# Runs when a release is published. It pushes the images to ghcr.io and
+# attaches the binaries to the release.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Log in to ghcr.io
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+
+      - name: Build and push the images
+        env:
+          VERSION: ${{ github.event.release.tag_name }}
+        run: scripts/push-images.sh "$VERSION"
+
+  binaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jetify-com/devbox-install-action@v0.15.0
+        with:
+          enable-cache: true
+
+      - name: Build the binaries
+        run: devbox run -- scripts/release-binaries.sh dist
+
+      - name: Attach them to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" dist/* --clobber
