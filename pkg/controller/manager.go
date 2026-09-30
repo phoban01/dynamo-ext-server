@@ -53,6 +53,7 @@ func Run(ctx context.Context, cfg *rest.Config, o *Options) error {
 		Resync:    o.LeaseDuration / 3,
 	}
 	members.Drained = claims.Drained
+	members.MarkLost = claims.MarkLost
 	if err := claims.SetupWithManager(mgr); err != nil {
 		return err
 	}

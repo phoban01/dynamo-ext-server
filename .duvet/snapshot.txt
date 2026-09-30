@@ -254,6 +254,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: When the controller starts, it MUST try to renew its existing `Member`.
     TEXT[!MUST,implementation,test]: If the renew succeeds, the controller MUST keep the UID of that `Member`.
     TEXT[!MUST,implementation]: If the `Member` does not exist, the controller MUST create a new one.
+    TEXT[!MUST,implementation,test]: After a join, the controller MUST set each claim with another
+    TEXT[!MUST,implementation,test]: `status.memberUID` to `Lost` before it treats itself as live.
 
   SECTION: [7.3. Renew](#7-3-renew)
     TEXT[!MUST,implementation]: A renew MUST be an update of `Member.status.renewTime`.
@@ -305,6 +307,10 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: If the clear fails with `409 Conflict`, the sweeper MUST skip the device
     TEXT[!MUST,implementation]: until its next run.
     TEXT[!MUST,implementation]: The sweeper MUST run at least once every `D`.
+
+  SECTION: [8.4. Safety](#8-4-safety)
+    TEXT[test]: A sweeper deletes a `Member` only after the holder treats itself as not
+    TEXT[test]: live.
 
   SECTION: [9.1. Mapping](#9-1-mapping)
     TEXT[!MUST,implementation]: The old object and its Device MUST have the same name.

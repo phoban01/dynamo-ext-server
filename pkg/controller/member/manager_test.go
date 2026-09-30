@@ -2,6 +2,7 @@ package member
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -161,5 +162,38 @@ func TestLeaveDeletesTheMemberWhenDrained(t *testing.T) {
 	}
 	if err := m.Tick(ctx); err != nil || m.Status().UID != "" {
 		t.Errorf("after leave the manager joined again: %+v, %v", m.Status(), err)
+	}
+}
+
+//= spec/solas.md#7-2-join
+//= type=test
+//# After a join, the controller MUST set each claim with another
+//# `status.memberUID` to `Lost` before it treats itself as live.
+
+func TestJoinMarksLostBeforeLive(t *testing.T) {
+	ctx := context.Background()
+	c := fakekube.NewClient()
+	m := newManager(c, clocktesting.NewFakePassiveClock(time.Unix(1000, 0)))
+	fail := true
+	var marked []types.UID
+	m.MarkLost = func(_ context.Context, uid types.UID) error {
+		if fail {
+			return errors.New("claims store down")
+		}
+		marked = append(marked, uid)
+		return nil
+	}
+	if err := m.Tick(ctx); err == nil {
+		t.Fatal("join succeeded although MarkLost failed")
+	}
+	if m.Status().Live {
+		t.Fatal("live before MarkLost succeeded")
+	}
+	fail = false
+	if err := m.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if st := m.Status(); !st.Live || len(marked) != 1 || marked[0] != st.UID {
+		t.Errorf("status %+v, marked %v", st, marked)
 	}
 }

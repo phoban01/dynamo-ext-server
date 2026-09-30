@@ -429,6 +429,10 @@ If the renew succeeds, the controller MUST keep the UID of that `Member`.
 If the `Member` does not exist, the controller MUST create a new one.
 If the new UID differs from the UID in a claim's `status.memberUID`, the
 claim is `Lost`, as section 6.5 describes.
+After a join, the controller MUST set each claim with another
+`status.memberUID` to `Lost` before it treats itself as live.
+Otherwise a claim can look `Bound` for a moment under a member that has
+lost its device.
 
 ### 7.3. Renew
 

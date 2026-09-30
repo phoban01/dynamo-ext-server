@@ -44,6 +44,11 @@ type Manager struct {
 	// manager deletes its Member on leave only after that, spec 7.6.
 	Drained func(ctx context.Context, uid types.UID) (bool, error)
 
+	// MarkLost sets each held claim with a member UID other than uid to Lost.
+	// The manager calls it after a join and before it counts itself live,
+	// spec 7.2. If it fails, the manager stays not live and tries again.
+	MarkLost func(ctx context.Context, uid types.UID) error
+
 	mu       sync.Mutex
 	member   *solasv1alpha1.Member
 	sentAt   time.Time
@@ -122,6 +127,9 @@ func (m *Manager) join(ctx context.Context) error {
 		if err := m.Client.Status().Update(ctx, &mem); err != nil {
 			return client.IgnoreNotFound(ignoreConflict(err))
 		}
+		if err := m.markLost(ctx, mem.UID); err != nil {
+			return err
+		}
 		m.set(&mem, send)
 		return nil
 	case apierrors.IsNotFound(err):
@@ -142,6 +150,9 @@ func (m *Manager) join(ctx context.Context) error {
 			return ignoreConflict(ignoreExists(err))
 		}
 		log.FromContext(ctx).Info("joined", "member", m.ClusterID, "uid", mem.UID)
+		if err := m.markLost(ctx, mem.UID); err != nil {
+			return err
+		}
 		m.set(&mem, send)
 		return nil
 	default:
@@ -266,4 +277,16 @@ func ignoreExists(err error) error {
 		return nil
 	}
 	return err
+}
+
+//= spec/solas.md#7-2-join
+//# After a join, the controller MUST set each claim with another
+//# `status.memberUID` to `Lost` before it treats itself as live.
+
+// markLost runs the MarkLost hook, when there is one.
+func (m *Manager) markLost(ctx context.Context, uid types.UID) error {
+	if m.MarkLost == nil {
+		return nil
+	}
+	return m.MarkLost(ctx, uid)
 }
