@@ -2,9 +2,9 @@ package pivot
 
 import (
 	"bytes"
-	"errors"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -156,4 +156,3 @@ func newConflict(name string) error {
 	return apierrors.NewConflict(solasv1alpha1.Resource("devices"), name,
 		errors.New("device is bound"))
 }
-
