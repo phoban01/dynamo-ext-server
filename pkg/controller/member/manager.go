@@ -27,6 +27,8 @@ type Status struct {
 	Draining bool
 	// Left is true after a graceful leave.
 	Left bool
+	// LeaseEnd is when the lease ends by this member's clock, S + D - M.
+	LeaseEnd time.Time
 }
 
 // Manager keeps the Member of this cluster.
@@ -69,6 +71,7 @@ func (m *Manager) Status() Status {
 		//# The member MUST treat itself as not live from local time `S + D - M`.
 		Live:     m.Clock.Since(m.sentAt) < m.Lease-m.Margin,
 		Draining: m.draining,
+		LeaseEnd: m.sentAt.Add(m.Lease - m.Margin),
 	}
 }
 

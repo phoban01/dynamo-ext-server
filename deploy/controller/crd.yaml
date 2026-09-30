@@ -20,7 +20,9 @@ spec:
       additionalPrinterColumns:
         - {name: Phase, type: string, jsonPath: .status.phase}
         - {name: Device, type: string, jsonPath: .status.deviceName}
+        - {name: Priority, type: integer, jsonPath: .spec.priority}
         - {name: Token, type: integer, jsonPath: .status.fencingToken}
+        - {name: Expires, type: date, jsonPath: .status.leaseExpiresAt}
         - {name: Age, type: date, jsonPath: .metadata.creationTimestamp}
       schema:
         openAPIV3Schema:
@@ -29,8 +31,12 @@ spec:
             spec:
               type: object
               properties:
+                priority:
+                  description: A higher number is more urgent, and may preempt a preemptible device held at a lower priority.
+                  type: integer
+                  format: int32
                 selector:
-                  description: Matches Device labels. Empty matches every device.
+                  description: Matches Device labels and a CEL expression. Empty matches every device.
                   type: object
                   properties:
                     matchLabels:
@@ -47,13 +53,20 @@ spec:
                           values:
                             type: array
                             items: {type: string}
+                    cel:
+                      description: A CEL expression over the variable device. The device matches when it is true.
+                      type: string
+                      maxLength: 4096
             status:
               type: object
               properties:
                 phase:
                   type: string
-                  enum: [Pending, Bound, Suspended, Lost]
+                  enum: [Pending, Bound, Preempting, Preempted, Suspended, Lost]
                 deviceName: {type: string}
+                leaseExpiresAt: {type: string, format: date-time}
+                preemptionSeenAt: {type: string, format: date-time}
+                preemptionTarget: {type: string}
                 memberUID: {type: string}
                 fencingToken:
                   type: integer

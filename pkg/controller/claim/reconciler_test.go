@@ -6,6 +6,7 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -91,7 +92,7 @@ func getDevice(t *testing.T, c client.Client, name string) *solasv1alpha1.Device
 
 func TestBindMatchingFreeDevice(t *testing.T) {
 	c1 := claim("c1", "u1")
-	c1.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"kind": "gpu"}}
+	c1.Spec.Selector = &claimsv1alpha1.DeviceSelector{LabelSelector: metav1.LabelSelector{MatchLabels: map[string]string{"kind": "gpu"}}}
 	k := fakekube.NewClient(device("cpu-1", map[string]string{"kind": "cpu"}, nil),
 		device("gpu-1", map[string]string{"kind": "gpu"}, nil), c1)
 	settle(t, newReconciler(k, live()), c1)
@@ -357,5 +358,65 @@ func TestDrainSuspendsThenReleases(t *testing.T) {
 	}
 	if drained, err := r.Drained(ctx, muid); !drained || err != nil {
 		t.Errorf("Drained = %v, %v; want true", drained, err)
+	}
+}
+
+//= spec/solas.md#10-3-selection
+//= type=test
+//# A device matches a claim only when the label selector and the CEL
+//# expression both match it.
+
+func TestCELSelectsOnConditions(t *testing.T) {
+	healthy := device("gpu-ok", map[string]string{"kind": "gpu"}, nil)
+	healthy.Spec.Attributes = map[string]string{"model": "A100"}
+	healthy.Status.Conditions = []metav1.Condition{{Type: "Healthy", Status: metav1.ConditionTrue, Reason: "Ok", LastTransitionTime: metav1.Now()}}
+	sick := device("gpu-sick", map[string]string{"kind": "gpu"}, nil)
+	sick.Spec.Attributes = map[string]string{"model": "A100"}
+	sick.Status.Conditions = []metav1.Condition{{Type: "Healthy", Status: metav1.ConditionFalse, Reason: "Fan", LastTransitionTime: metav1.Now()}}
+	other := device("gpu-h100", map[string]string{"kind": "gpu"}, nil)
+	other.Spec.Attributes = map[string]string{"model": "H100"}
+	other.Status.Conditions = healthy.Status.Conditions
+
+	c1 := claim("c1", "u1")
+	c1.Spec.Selector = &claimsv1alpha1.DeviceSelector{
+		LabelSelector: metav1.LabelSelector{MatchLabels: map[string]string{"kind": "gpu"}},
+		CEL: `device.spec.attributes.model == "A100" &&
+		      device.status.conditions.exists(c, c.type == "Healthy" && c.status == "True")`,
+	}
+	k := fakekube.NewClient(sick, other, healthy, c1)
+	settle(t, newReconciler(k, live()), c1)
+	if got := getClaim(t, k, "c1"); got.Status.DeviceName != "gpu-ok" {
+		t.Errorf("claim bound %q, want gpu-ok", got.Status.DeviceName)
+	}
+}
+
+func TestInvalidCELNeverBinds(t *testing.T) {
+	c1 := claim("c1", "u1")
+	c1.Spec.Selector = &claimsv1alpha1.DeviceSelector{CEL: `device.spec.(`}
+	k := fakekube.NewClient(device("d1", nil, nil), c1)
+	settle(t, newReconciler(k, live()), c1)
+	got := getClaim(t, k, "c1")
+	if got.Status.Phase == claimsv1alpha1.ClaimBound {
+		t.Fatal("a claim with invalid CEL bound a device")
+	}
+	c := meta.FindStatusCondition(got.Status.Conditions, "SelectorValid")
+	if c == nil || c.Status != metav1.ConditionFalse {
+		t.Errorf("SelectorValid = %+v, want False", c)
+	}
+}
+
+func TestLeaseExpiresAtIsShown(t *testing.T) {
+	c1 := claim("c1", "u1")
+	k := fakekube.NewClient(device("d1", nil, nil), c1)
+	m := live()
+	m.st.LeaseEnd = time.Unix(5000, 0)
+	r := newReconciler(k, m)
+	settle(t, r, c1)
+	// The bind ends the first reconcile; the next one shows the lease end.
+	if _, err := r.Reconcile(context.Background(), reconcile.Request{NamespacedName: client.ObjectKeyFromObject(c1)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := getClaim(t, k, "c1").Status.LeaseExpiresAt; got == nil || !got.Time.Equal(time.Unix(5000, 0)) {
+		t.Errorf("leaseExpiresAt = %v, want 5000", got)
 	}
 }

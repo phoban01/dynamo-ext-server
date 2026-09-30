@@ -622,7 +622,9 @@ A higher number is more urgent.
 variable `device`.
 A device matches a claim only when the label selector and the CEL
 expression both match it.
-The CRD MUST reject a CEL expression that does not compile.
+If the expression does not compile, the controller MUST NOT bind the
+claim and MUST set the condition `SelectorValid` to `False`.
+A CRD cannot check that a string is valid CEL.
 If the expression fails at run time for a device, that device MUST NOT
 match.
 

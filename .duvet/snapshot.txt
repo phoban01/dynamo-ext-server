@@ -368,14 +368,17 @@ SPECIFICATION: [Solas specification](spec/solas.md)
   SECTION: [10.3. Selection](#10-3-selection)
     TEXT[!MAY]: `DeviceClaim.spec.selector.cel` MAY hold a CEL expression over the
     TEXT[!MAY]: variable `device`.
-    TEXT[!MUST]: The CRD MUST reject a CEL expression that does not compile.
-    TEXT[!MUST]: If the expression fails at run time for a device, that device MUST NOT
-    TEXT[!MUST]: match.
+    TEXT[implementation,test]: A device matches a claim only when the label selector and the CEL
+    TEXT[implementation,test]: expression both match it.
+    TEXT[!MUST,implementation]: If the expression does not compile, the controller MUST NOT bind the
+    TEXT[!MUST,implementation]: claim and MUST set the condition `SelectorValid` to `False`.
+    TEXT[!MUST,implementation]: If the expression fails at run time for a device, that device MUST NOT
+    TEXT[!MUST,implementation]: match.
 
   SECTION: [10.4. Lease display](#10-4-lease-display)
-    TEXT[!SHOULD]: The controller SHOULD set `DeviceClaim.status.leaseExpiresAt` on each
-    TEXT[!SHOULD]: `Bound` claim to the end of its member's lease, `S + D - M`, as a wall
-    TEXT[!SHOULD]: time by the holder's clock.
+    TEXT[!SHOULD,implementation]: The controller SHOULD set `DeviceClaim.status.leaseExpiresAt` on each
+    TEXT[!SHOULD,implementation]: `Bound` claim to the end of its member's lease, `S + D - M`, as a wall
+    TEXT[!SHOULD,implementation]: time by the holder's clock.
     TEXT[!MUST]: No component MUST use `leaseExpiresAt` for any decision.
 
   SECTION: [10.5. Preemption request](#10-5-preemption-request)
@@ -387,10 +390,10 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST]: The request MUST name the requesting claim as a `claimRef` does, with its
     TEXT[!MUST]: priority.
     TEXT[!MUST]: The request MUST carry the resource version that the controller read.
-    TEXT[!MUST,implementation]: The server MUST reject a request whose priority is not greater than the
-    TEXT[!MUST,implementation]: priority of the holder.
-    TEXT[!MUST,implementation]: The server MUST reject a request that replaces a request of equal or
-    TEXT[!MUST,implementation]: greater priority.
+    TEXT[!MUST,implementation,test]: The server MUST reject a request whose priority is not greater than the
+    TEXT[!MUST,implementation,test]: priority of the holder.
+    TEXT[!MUST,implementation,test]: The server MUST reject a request that replaces a request of equal or
+    TEXT[!MUST,implementation,test]: greater priority.
 
   SECTION: [10.6. Release by the holder](#10-6-release-by-the-holder)
     TEXT[!MUST]: When the holder's controller sees a request on its device, it MUST set
@@ -404,9 +407,9 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST]: The controller MUST then set the claim back to `Pending`.
 
   SECTION: [10.7. Bind by the preemptor](#10-7-bind-by-the-preemptor)
-    TEXT[!MUST,implementation]: While a device has a request, the server MUST reject a bind that does not
-    TEXT[!MUST,implementation]: name the requesting claim.
-    TEXT[!MUST,implementation]: The bind of the requesting claim MUST clear `status.preemption`.
+    TEXT[!MUST,implementation,test]: While a device has a request, the server MUST reject a bind that does not
+    TEXT[!MUST,implementation,test]: name the requesting claim.
+    TEXT[!MUST,implementation,test]: The bind of the requesting claim MUST clear `status.preemption`.
 
   SECTION: [10.8. Holders that do not respond](#10-8-holders-that-do-not-respond)
     TEXT[!MUST]: The preemptor MUST NOT clear the `claimRef` of the holder.

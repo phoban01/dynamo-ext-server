@@ -9,8 +9,8 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,8 +42,9 @@ type Reconciler struct {
 	// sets it so a run can be replayed.
 	Rand *rand.Rand
 
-	mu   sync.Mutex
-	rand *rand.Rand
+	mu       sync.Mutex
+	programs programs
+	rand     *rand.Rand
 }
 
 var _ reconcile.Reconciler = &Reconciler{}
@@ -132,9 +133,12 @@ func (r *Reconciler) bind(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 		}
 	}
 
-	sel, err := selector(claim)
+	sel, err := r.newMatcher(claim)
 	if err != nil {
-		return reconcile.Result{}, reconcile.TerminalError(err)
+		//= spec/solas.md#10-3-selection
+		//# If the expression does not compile, the controller MUST NOT bind the
+		//# claim and MUST set the condition `SelectorValid` to `False`.
+		return reconcile.Result{}, r.setCondition(ctx, claim, "SelectorValid", metav1.ConditionFalse, "Invalid", err.Error())
 	}
 	//= spec/solas.md#6-3-bind
 	//# The controller MUST pick a device from the free devices that match the
@@ -142,7 +146,7 @@ func (r *Reconciler) bind(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 	var free []*solasv1alpha1.Device
 	for i := range devices {
 		d := &devices[i]
-		if d.Status.ClaimRef == nil && d.DeletionTimestamp.IsZero() && sel.Matches(labels.Set(d.Labels)) {
+		if d.Status.ClaimRef == nil && d.DeletionTimestamp.IsZero() && sel.Matches(d) {
 			free = append(free, d)
 		}
 	}
@@ -249,6 +253,20 @@ func (r *Reconciler) held(ctx context.Context, claim *claimsv1alpha1.DeviceClaim
 		}
 	}
 
+	//= spec/solas.md#10-4-lease-display
+	//# The controller SHOULD set `DeviceClaim.status.leaseExpiresAt` on each
+	//# `Bound` claim to the end of its member's lease, `S + D - M`, as a wall
+	//# time by the holder's clock.
+	if st.Live && (claim.Status.Phase == claimsv1alpha1.ClaimBound || claim.Status.Phase == claimsv1alpha1.ClaimPreempting) {
+		if old := claim.Status.LeaseExpiresAt; old == nil || absDuration(old.Time.Sub(st.LeaseEnd)) >= time.Second {
+			end := metav1.NewTime(st.LeaseEnd)
+			claim.Status.LeaseExpiresAt = &end
+			if err := r.Client.Status().Update(ctx, claim); err != nil {
+				return reconcile.Result{}, ignoreConflict(err)
+			}
+		}
+	}
+
 	switch claim.Status.Phase {
 	case claimsv1alpha1.ClaimBound:
 		//= spec/solas.md#6-5-phases
@@ -351,16 +369,27 @@ func (r *Reconciler) intN(n int) int {
 	return r.rand.IntN(n)
 }
 
-func selector(claim *claimsv1alpha1.DeviceClaim) (labels.Selector, error) {
-	if claim.Spec.Selector == nil {
-		return labels.Everything(), nil
-	}
-	return metav1.LabelSelectorAsSelector(claim.Spec.Selector)
-}
-
 func ignoreConflict(err error) error {
 	if apierrors.IsConflict(err) {
 		return nil
 	}
 	return err
+}
+
+// setCondition sets one condition of the claim and saves the status.
+func (r *Reconciler) setCondition(ctx context.Context, claim *claimsv1alpha1.DeviceClaim,
+	typ string, status metav1.ConditionStatus, reason, msg string) error {
+	if !meta.SetStatusCondition(&claim.Status.Conditions, metav1.Condition{
+		Type: typ, Status: status, Reason: reason, Message: msg, ObservedGeneration: claim.Generation,
+	}) {
+		return nil
+	}
+	return ignoreConflict(r.Client.Status().Update(ctx, claim))
+}
+
+func absDuration(d time.Duration) time.Duration {
+	if d < 0 {
+		return -d
+	}
+	return d
 }
