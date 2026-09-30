@@ -22,7 +22,8 @@ func seeds(t *testing.T) []uint64 {
 		}
 		return def
 	}
-	count, start := get("SIM_SEEDS", 200), get("SIM_START", 1)
+	// A plain go test runs 20 seeds; the gate sets SIM_SEEDS.
+	count, start := get("SIM_SEEDS", 20), get("SIM_START", 1)
 	shards, shard := get("SIM_SHARDS", 1), get("SIM_SHARD", 0)
 	var out []uint64
 	for s := start; s < start+count; s++ {

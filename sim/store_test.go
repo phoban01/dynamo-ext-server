@@ -14,7 +14,7 @@ import (
 func TestStoreRoutesClaimsLocally(t *testing.T) {
 	ctx := context.Background()
 	shared := newShared(false)
-	a, b := newRouter(shared), newRouter(shared)
+	a, b := newRouter(shared, nil, 0), newRouter(shared, nil, 0)
 
 	claim := &claimsv1alpha1.DeviceClaim{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "job"}}
 	if err := a.Create(ctx, claim); err != nil {

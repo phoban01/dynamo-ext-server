@@ -41,10 +41,10 @@ type cluster struct {
 	paused bool
 }
 
-func newCluster(name string, shared client.Client, start time.Time, s Settings, rng *rand.Rand) *cluster {
+func newCluster(name string, shared client.Client, start time.Time, s Settings, rng *rand.Rand, lag float64) *cluster {
 	c := &cluster{
 		name:     name,
-		client:   newRouter(shared),
+		client:   newRouter(shared, rand.New(rand.NewPCG(rng.Uint64(), rng.Uint64())), lag),
 		clock:    clocktesting.NewFakePassiveClock(start),
 		settings: s,
 		rng:      rng,

@@ -24,6 +24,9 @@ type Config struct {
 	Tick time.Duration
 	// Rho bounds the rate drift of each clock, spec 7.5.
 	Rho float64
+	// Lag is the chance that a device list is the one of the call before,
+	// see router.
+	Lag float64
 	// Unconditional breaks the store on purpose, see fakekube.Options.
 	Unconditional bool
 }
@@ -37,6 +40,7 @@ func DefaultConfig() Config {
 		Settings: Settings{Lease: 30 * time.Second, Margin: 3 * time.Second, Sweep: 10 * time.Second},
 		Tick:     time.Second,
 		Rho:      0.01,
+		Lag:      0.3,
 	}
 }
 
@@ -88,7 +92,7 @@ func NewWorld(ctx context.Context, seed uint64, cfg Config) (*World, error) {
 	for i := range cfg.Clusters {
 		// The clocks start far apart; solas does not depend on synced clocks.
 		start := time.Unix(int64(1_000_000*(i+1)), 0)
-		w.clusters = append(w.clusters, newCluster(fmt.Sprintf("c%d", i), w.shared, start, cfg.Settings, w.rng))
+		w.clusters = append(w.clusters, newCluster(fmt.Sprintf("c%d", i), w.shared, start, cfg.Settings, w.rng, cfg.Lag))
 	}
 	return w, nil
 }

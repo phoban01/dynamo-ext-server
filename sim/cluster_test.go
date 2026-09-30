@@ -20,7 +20,7 @@ func TestClusterJoinsAndBinds(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := newCluster("a", shared, time.Unix(1000, 0),
-		Settings{Lease: 30 * time.Second, Margin: 3 * time.Second, Sweep: 10 * time.Second}, rand.New(rand.NewPCG(1, 2)))
+		Settings{Lease: 30 * time.Second, Margin: 3 * time.Second, Sweep: 10 * time.Second}, rand.New(rand.NewPCG(1, 2)), 0)
 	if err := c.members.Tick(ctx); err != nil {
 		t.Fatal(err)
 	}

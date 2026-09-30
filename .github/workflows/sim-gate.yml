@@ -1,0 +1,35 @@
+name: sim-gate
+
+on:
+  pull_request:
+    paths:
+      - "pkg/controller/**"
+      - "pkg/registry/**"
+      - "pkg/storage/**"
+      - "internal/fakekube/**"
+      - "sim/**"
+      - "quint/**"
+  push:
+    branches: [main]
+    paths:
+      - "pkg/controller/**"
+      - "pkg/registry/**"
+      - "pkg/storage/**"
+      - "internal/fakekube/**"
+      - "sim/**"
+      - "quint/**"
+
+jobs:
+  sim:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jetify-com/devbox-install-action@v0.15.0
+        with:
+          enable-cache: true
+      - name: Simulator shard ${{ matrix.shard }}
+        run: SIM_SHARD=${{ matrix.shard }} devbox run sim-gate

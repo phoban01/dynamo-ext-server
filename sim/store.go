@@ -6,12 +6,14 @@ package sim
 import (
 	"context"
 	"errors"
+	"math/rand/v2"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phoban01/solas/internal/fakekube"
 	claimsv1alpha1 "github.com/phoban01/solas/pkg/apis/claims/v1alpha1"
+	solasv1alpha1 "github.com/phoban01/solas/pkg/apis/solas/v1alpha1"
 )
 
 // newShared returns the shared store of Devices and Members, as the table
@@ -26,11 +28,20 @@ func newShared(unconditional bool) client.Client {
 type router struct {
 	client.Client
 	local client.Client
+
+	// rng and lag make a device list late: with probability lag, List
+	// returns the device list of the call before. That is a list followed
+	// by other steps before the caller acts on it, as in a real race
+	// between a read and a write. Member lists are never late: the sweeper
+	// must see devices before members, spec 8.3.
+	rng  *rand.Rand
+	lag  float64
+	last *solasv1alpha1.DeviceList
 }
 
 // newRouter returns the client that one cluster's controllers use.
-func newRouter(shared client.Client) *router {
-	return &router{Client: shared, local: fakekube.NewClient()}
+func newRouter(shared client.Client, rng *rand.Rand, lag float64) *router {
+	return &router{Client: shared, local: fakekube.NewClient(), rng: rng, lag: lag}
 }
 
 func (r *router) pick(o runtime.Object) client.Client {
@@ -46,6 +57,17 @@ func (r *router) Get(ctx context.Context, key client.ObjectKey, obj client.Objec
 }
 
 func (r *router) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	if dl, ok := list.(*solasv1alpha1.DeviceList); ok && r.rng != nil {
+		if r.last != nil && r.rng.Float64() < r.lag {
+			r.last.DeepCopyInto(dl)
+			return nil
+		}
+		if err := r.Client.List(ctx, dl, opts...); err != nil {
+			return err
+		}
+		r.last = dl.DeepCopy()
+		return nil
+	}
 	return r.pick(list).List(ctx, list, opts...)
 }
 
