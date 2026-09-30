@@ -333,17 +333,17 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: The verify MUST check that each old object has a Device.
     TEXT[!MUST,implementation,test]: It MUST check that the Device names the old object, and that the labels
     TEXT[!MUST,implementation,test]: and the description match.
-    TEXT[!MUST]: It MUST exit with a status other than 0 when any check fails.
+    TEXT[!MUST,implementation]: It MUST exit with a status other than 0 when any check fails.
 
   SECTION: [9.4. Webhook](#9-4-webhook)
-    TEXT[!MUST]: The webhook MUST be a mutating admission webhook on the old resource,
-    TEXT[!MUST]: for create, update, and delete.
-    TEXT[!MUST]: On a create or an update, the webhook MUST write the Device before it
-    TEXT[!MUST]: allows the request.
-    TEXT[!MUST]: It MUST then add `solas.dev/pivoted-to` to the old object with a patch.
-    TEXT[!MUST]: If the webhook cannot write the Device, it MUST deny the request.
-    TEXT[!MUST]: The webhook configuration MUST use `failurePolicy: Fail`.
-    TEXT[!MUST]: On a dry-run request, the webhook MUST NOT write the Device.
-    TEXT[!MUST]: On a delete, the webhook MUST delete the Device.
-    TEXT[!MUST]: If solas rejects the delete of the Device, the webhook MUST deny the
-    TEXT[!MUST]: delete of the old object.
+    TEXT[!MUST,implementation]: The webhook MUST be a mutating admission webhook on the old resource,
+    TEXT[!MUST,implementation]: for create, update, and delete.
+    TEXT[!MUST,implementation,test]: On a create or an update, the webhook MUST write the Device before it
+    TEXT[!MUST,implementation,test]: allows the request.
+    TEXT[!MUST,implementation,test]: It MUST then add `solas.dev/pivoted-to` to the old object with a patch.
+    TEXT[!MUST,implementation]: If the webhook cannot write the Device, it MUST deny the request.
+    TEXT[!MUST,implementation,test]: The webhook configuration MUST use `failurePolicy: Fail`.
+    TEXT[!MUST,implementation,test]: On a dry-run request, the webhook MUST NOT write the Device.
+    TEXT[!MUST,implementation]: On a delete, the webhook MUST delete the Device.
+    TEXT[!MUST,implementation,test]: If solas rejects the delete of the Device, the webhook MUST deny the
+    TEXT[!MUST,implementation,test]: delete of the old object.

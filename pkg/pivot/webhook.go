@@ -20,6 +20,11 @@ import (
 //# The webhook MUST be a mutating admission webhook on the old resource,
 //# for create, update, and delete.
 
+//= spec/solas.md#9-4-webhook
+//# The webhook configuration MUST use `failurePolicy: Fail`.
+//
+// deploy/pivot/webhook.yaml sets it, and manifest_test.go checks it.
+
 // Webhook is the mutating admission webhook on the old resource. It keeps
 // each Device in step with its old object while clients still write the
 // old CRD.
