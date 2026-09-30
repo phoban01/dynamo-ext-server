@@ -62,3 +62,52 @@ func TestMBT(t *testing.T) {
 		})
 	}
 }
+
+// TestMBTCatchesADivergence changes the expected state of a trace in two
+// ways. The replay must report each one, which shows that it compares.
+func TestMBTCatchesADivergence(t *testing.T) {
+	load := func() *Trace {
+		tr, err := Load("testdata/orphan.itf.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tr
+	}
+	firstBind := func(tr *Trace) int {
+		for i, s := range tr.Steps {
+			if msg, ok := s.Msg(); ok && s.Action == "landSome" &&
+				s.State.Devices[msg.Dev].RV != tr.Steps[i-1].State.Devices[msg.Dev].RV {
+				return i
+			}
+		}
+		t.Fatal("the trace has no applied bind")
+		return 0
+	}
+
+	t.Run("wrong fencing token", func(t *testing.T) {
+		tr := load()
+		i := firstBind(tr)
+		msg, _ := tr.Steps[i].Msg()
+		dev := tr.Steps[i].State.Devices[msg.Dev]
+		dev.Token += 5
+		tr.Steps[i].State.Devices[msg.Dev] = dev
+		if err := newDriver(t).Replay(tr); err == nil {
+			t.Fatal("the replay did not see a wrong fencing token")
+		} else {
+			t.Logf("caught: %v", err)
+		}
+	})
+
+	t.Run("wrong write result", func(t *testing.T) {
+		tr := load()
+		i := firstBind(tr)
+		// Say that the model rejected the bind: keep the old device state.
+		msg, _ := tr.Steps[i].Msg()
+		tr.Steps[i].State.Devices[msg.Dev] = tr.Steps[i-1].State.Devices[msg.Dev]
+		if err := newDriver(t).Replay(tr); err == nil {
+			t.Fatal("the replay did not see a write that the model rejected")
+		} else {
+			t.Logf("caught: %v", err)
+		}
+	})
+}
