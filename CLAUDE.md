@@ -96,5 +96,6 @@ filler, no marketing adjectives, no emoji.
 - `quint/` models; `scripts/quint-check.sh` positive and negative checks
 - `.duvet/config.toml` and `.duvet/snapshot.txt` traceability gate
 - `cmd/solas-apiserver/` the extension server; `demo/k3d/` two-cluster demo
-- `docs/confidence.md` the trust ladder; `docs/sim-gate.md` the simulator
+- `docs/confidence.md` the trust ladder; `docs/sim-gate.md` the simulator;
+  `docs/mbt.md` the model-based tests
 - `.github/workflows/verify.yml` and `sim-gate.yml` the CI gates

@@ -33,6 +33,7 @@
       "sim-gate": "scripts/sim-gate.sh",
       "e2e": "scripts/e2e.sh",
       "smoke": "scripts/smoke.sh",
+      "mbt": "scripts/mbt.sh",
       "pivot-smoke": "scripts/pivot-smoke.sh",
       "demo": "demo/k3d/demo.sh",
       "demo-down": "demo/k3d/down.sh",
@@ -45,6 +46,7 @@
         "hack/verify-codegen.sh",
         "scripts/test.sh",
         "scripts/quint-check.sh",
+        "scripts/mbt.sh",
         "rm -rf .duvet/requirements && duvet report --ci"
       ]
     }

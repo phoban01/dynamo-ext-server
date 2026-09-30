@@ -294,11 +294,15 @@ Exit: `devbox run pivot-smoke` passes.
 ### M9: Model-based tests
 
 - A Quint run exports ITF traces.
-- A Go driver replays each trace against a real `solas-apiserver` and the
-  controllers. It checks that the observed state matches the trace state
+- A Go driver replays each trace against the real `solas-apiserver`
+  REST stores. It checks that the observed state matches the trace state
   after each step.
 
-Exit: the trace replay job passes in `devbox run e2e`.
+The driver replays the traces against the real REST stores of
+solas-apiserver on dynamodb-local. It needs no cluster, so `verify` runs
+it. The simulator gate covers the controllers. See `docs/mbt.md`.
+
+Exit: `devbox run mbt` passes, as part of `devbox run verify`.
 
 ### M10: Confidence ladder
 

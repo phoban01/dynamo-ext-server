@@ -29,4 +29,4 @@ else
   echo "test: no Docker; storage tests that need DynamoDB are skipped"
 fi
 
-go test -race "$@" ./...
+go test -race "$@" ${TEST_PKGS:-./...}

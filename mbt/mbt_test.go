@@ -1,0 +1,113 @@
+package mbt
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/phoban01/solas/internal/ddbtest"
+	"github.com/phoban01/solas/pkg/apiserver"
+	"github.com/phoban01/solas/pkg/storage/dynamo"
+)
+
+func newDriver(t *testing.T) *Driver {
+	t.Helper()
+	c := ddbtest.Client(t)
+	table := ddbtest.TableName(t)
+	ddbtest.DeleteTable(t, c, table)
+	if err := dynamo.EnsureTable(context.Background(), c, table); err != nil {
+		t.Fatal(err)
+	}
+	d, stop, err := NewDriver(apiserver.RESTOptionsGetter{
+		Dynamo:          dynamo.Config{Client: c, Table: table, PollInterval: 20 * time.Millisecond},
+		Codec:           apiserver.StorageCodec(),
+		EncodeVersioner: apiserver.StorageVersioner(),
+		Prefix:          "/registry",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(stop)
+	return d
+}
+
+// traces returns the trace files: MBT_TRACES, a directory from
+// scripts/mbt.sh, or the checked-in test data.
+func traces(t *testing.T) []string {
+	t.Helper()
+	dir := os.Getenv("MBT_TRACES")
+	if dir == "" {
+		dir = "testdata"
+	}
+	files, err := filepath.Glob(filepath.Join(dir, "*.itf.json"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no traces in %s: %v", dir, err)
+	}
+	return files
+}
+
+// TestMBT replays each trace against the real REST stores.
+func TestMBT(t *testing.T) {
+	for _, f := range traces(t) {
+		t.Run(filepath.Base(f), func(t *testing.T) {
+			tr, err := Load(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := newDriver(t).Replay(tr); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// TestMBTCatchesADivergence changes the expected state of a trace in two
+// ways. The replay must report each one, which shows that it compares.
+func TestMBTCatchesADivergence(t *testing.T) {
+	load := func() *Trace {
+		tr, err := Load("testdata/orphan.itf.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tr
+	}
+	firstBind := func(tr *Trace) int {
+		for i, s := range tr.Steps {
+			if msg, ok := s.Msg(); ok && s.Action == "landSome" &&
+				s.State.Devices[msg.Dev].RV != tr.Steps[i-1].State.Devices[msg.Dev].RV {
+				return i
+			}
+		}
+		t.Fatal("the trace has no applied bind")
+		return 0
+	}
+
+	t.Run("wrong fencing token", func(t *testing.T) {
+		tr := load()
+		i := firstBind(tr)
+		msg, _ := tr.Steps[i].Msg()
+		dev := tr.Steps[i].State.Devices[msg.Dev]
+		dev.Token += 5
+		tr.Steps[i].State.Devices[msg.Dev] = dev
+		if err := newDriver(t).Replay(tr); err == nil {
+			t.Fatal("the replay did not see a wrong fencing token")
+		} else {
+			t.Logf("caught: %v", err)
+		}
+	})
+
+	t.Run("wrong write result", func(t *testing.T) {
+		tr := load()
+		i := firstBind(tr)
+		// Say that the model rejected the bind: keep the old device state.
+		msg, _ := tr.Steps[i].Msg()
+		tr.Steps[i].State.Devices[msg.Dev] = tr.Steps[i-1].State.Devices[msg.Dev]
+		if err := newDriver(t).Replay(tr); err == nil {
+			t.Fatal("the replay did not see a write that the model rejected")
+		} else {
+			t.Logf("caught: %v", err)
+		}
+	})
+}
