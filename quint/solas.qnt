@@ -965,6 +965,30 @@ module solas {
       sweepDone(c),
     },
   }
+
+  // A step with no faults and no leave, for model-based tests. Random
+  // traces of step rarely bind two claims, so they rarely reach a
+  // preemption. Traces of this step do.
+  action calmStep = any {
+    nondet c = CFG.clusters.oneOf()
+    nondet d = CFG.devices.oneOf()
+    nondet k = CFG.claims.oneOf()
+    any {
+      tick,
+      landSome,
+      bindSend(k, d),
+      adopt(k, d),
+      use(k),
+      requestPreemption(k, d),
+      seePreemption(k),
+      markPreempted(k),
+      releasePreempted(k),
+      withdrawPreemption(c, d),
+      join(c),
+      renewSend(c),
+      renewLand(c),
+    },
+  }
 }
 
 // Two clusters, two devices, and three claims. The clocks start far

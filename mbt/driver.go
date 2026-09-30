@@ -18,8 +18,26 @@ import (
 	"github.com/phoban01/solas/pkg/registry/solas/member"
 )
 
+// ModelConfig is the part of the CFG of the Quint instance that a trace
+// does not carry. It must match the instance that wrote the traces.
+type ModelConfig struct {
+	Owner       map[string]string
+	Priority    map[string]int32
+	Preemptible map[string]bool
+	GraceSecs   int32
+}
+
+// Solas2 is the CFG of the instance solas2 in quint/solas.qnt.
+var Solas2 = ModelConfig{
+	Owner:       map[string]string{"a1": "a", "a2": "a", "b1": "b"},
+	Priority:    map[string]int32{"a1": 1, "a2": 0, "b1": 2},
+	Preemptible: map[string]bool{"d1": true, "d2": false},
+	GraceSecs:   20,
+}
+
 // Driver replays traces against the real REST stores of solas-apiserver.
 type Driver struct {
+	cfg          ModelConfig
 	devices      *device.REST
 	deviceStatus *device.StatusREST
 	members      *member.REST
@@ -47,6 +65,7 @@ func NewDriver(getter generic.RESTOptionsGetter) (*Driver, func(), error) {
 		m.Store.DestroyFunc()
 	}
 	return &Driver{
+		cfg:     Solas2,
 		devices: d, deviceStatus: ds, members: m, memberStatus: ms,
 		uids:  map[int64]types.UID{},
 		devRV: map[string]map[int64]string{},
@@ -64,7 +83,11 @@ func (d *Driver) Replay(tr *Trace) error {
 		return fmt.Errorf("empty trace")
 	}
 	for name, dev := range tr.Steps[0].State.Devices {
-		obj, err := d.devices.Create(ctx(), &solas.Device{ObjectMeta: metav1.ObjectMeta{Name: name}},
+		grace := d.cfg.GraceSecs
+		obj, err := d.devices.Create(ctx(), &solas.Device{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Spec:       solas.DeviceSpec{Preemptible: d.cfg.Preemptible[name], PreemptionGracePeriodSeconds: &grace},
+		},
 			rest.ValidateAllObjectFunc, &metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("create %s: %w", name, err)
@@ -143,8 +166,34 @@ func (d *Driver) apply(step Step, prev State) error {
 		if !known {
 			return fmt.Errorf("no real UID for model member UID %d", msg.MUID)
 		}
-		ref := &solas.ClaimRef{Member: msg.Cluster, MemberUID: uid, Namespace: "ns", Name: msg.Claim, UID: claimUID(msg.Claim)}
+		ref := &solas.ClaimRef{Member: msg.Cluster, MemberUID: uid, Namespace: "ns", Name: msg.Claim,
+			UID: claimUID(msg.Claim), Priority: d.cfg.Priority[msg.Claim]}
 		return d.writeRef(msg.Dev, msg.RV, cur.Devices[msg.Dev].RV, ref, applied)
+
+	case "requestPreemption":
+		k, dev := step.Pick("k"), step.Pick("d")
+		req := cur.Devices[dev].Preempt
+		uid, known := d.uids[req.MUID]
+		if !known {
+			return fmt.Errorf("no real UID for model member UID %d", req.MUID)
+		}
+		p := &solas.PreemptionRequest{Claim: solas.ClaimRef{Member: d.cfg.Owner[k], MemberUID: uid,
+			Namespace: "ns", Name: k, UID: claimUID(k), Priority: d.cfg.Priority[k]}}
+		return d.writePreemption(dev, prev.Devices[dev].RV, cur.Devices[dev].RV, p)
+
+	case "withdrawPreemption", "sweepClearPreempt":
+		dev := step.Pick("d")
+		return d.writePreemption(dev, prev.Devices[dev].RV, cur.Devices[dev].RV, nil)
+
+	case "releasePreempted":
+		// The holder clears its ref when the device still names it.
+		k := step.Pick("k")
+		for dev, pd := range prev.Devices {
+			if pd.Held && pd.Ref.Claim == k && !cur.Devices[dev].Held {
+				return d.writeRef(dev, pd.RV, cur.Devices[dev].RV, nil, true)
+			}
+		}
+		return nil
 
 	case "sweepClear", "release", "drainRelease", "releaseDuplicate", "clearOrphan":
 		dev := step.Pick("d")
@@ -230,6 +279,12 @@ func (d *Driver) compare(want State) error {
 			return fmt.Errorf("%s: model held=%v, server claimRef=%+v", name, wd.Held, ref)
 		case wd.Held && (ref.Member != wd.Ref.Member || ref.Name != wd.Ref.Claim || ref.MemberUID != d.uids[wd.Ref.MUID]):
 			return fmt.Errorf("%s: model ref=%+v, server ref=%+v", name, wd.Ref, *ref)
+		case wd.Held && ref.Priority != int32(wd.Ref.Prio):
+			return fmt.Errorf("%s: model holder priority=%d, server=%d", name, wd.Ref.Prio, ref.Priority)
+		case wd.Requested != (got.Status.Preemption != nil):
+			return fmt.Errorf("%s: model request=%v, server request=%+v", name, wd.Requested, got.Status.Preemption)
+		case wd.Requested && (got.Status.Preemption.Claim.Name != wd.Preempt.Claim || got.Status.Preemption.Claim.Priority != int32(wd.Preempt.Prio) || got.Status.Preemption.Claim.MemberUID != d.uids[wd.Preempt.MUID]):
+			return fmt.Errorf("%s: model request=%+v, server request=%+v", name, wd.Preempt, got.Status.Preemption.Claim)
 		case got.Status.FencingToken != wd.Token:
 			return fmt.Errorf("%s: model token=%d, server token=%d", name, wd.Token, got.Status.FencingToken)
 		}
@@ -281,3 +336,26 @@ func (d *Driver) realMemRV(m string, model int64) (string, error) {
 }
 
 func claimUID(claim string) types.UID { return types.UID("uid-" + claim) }
+
+// writePreemption sets or clears the preemption request of device dev with
+// the real version of fromRV. The model applied the write.
+func (d *Driver) writePreemption(dev string, fromRV, toRV int64, req *solas.PreemptionRequest) error {
+	rv, err := d.realDevRV(dev, fromRV)
+	if err != nil {
+		return err
+	}
+	cur, err := d.devices.Get(ctx(), dev, &metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("get device %s: %w", dev, err)
+	}
+	obj := cur.(*solas.Device).DeepCopy()
+	obj.ResourceVersion = rv
+	obj.Status.Preemption = req
+	out, _, err := d.deviceStatus.Update(ctx(), dev, rest.DefaultUpdatedObjectInfo(obj),
+		rest.ValidateAllObjectFunc, rest.ValidateAllObjectUpdateFunc, false, &metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("write of %s request: model applied it, server err=%v", dev, err)
+	}
+	d.setDevRV(dev, toRV, out.(*solas.Device).ResourceVersion)
+	return nil
+}

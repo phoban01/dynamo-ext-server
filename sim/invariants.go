@@ -20,6 +20,10 @@ func (w *World) check(ctx context.Context) error {
 	byName := map[string]*solasv1alpha1.Device{}
 	for i := range devices.Items {
 		d := &devices.Items[i]
+		// requestBeatsHolder: a request always beats the holder, spec 10.5.
+		if p, h := d.Status.Preemption, d.Status.ClaimRef; p != nil && h != nil && p.Claim.Priority <= h.Priority {
+			return fmt.Errorf("requestBeatsHolder: %s request priority %d, holder priority %d", d.Name, p.Claim.Priority, h.Priority)
+		}
 		byName[d.Name] = d
 		ref := d.Status.ClaimRef
 		if ref == nil {
@@ -60,7 +64,12 @@ func (w *World) check(ctx context.Context) error {
 		}
 		for i := range claims.Items {
 			cl := &claims.Items[i]
-			if cl.Status.Phase != claimsv1alpha1.ClaimBound || !cl.DeletionTimestamp.IsZero() || !st.Live {
+			if cl.Status.Phase == claimsv1alpha1.ClaimPreempted {
+				w.sawPreempted = true
+			}
+			// A Preempting claim is in effect, as a Bound one is, spec 10.6.
+			inEffect := cl.Status.Phase == claimsv1alpha1.ClaimBound || cl.Status.Phase == claimsv1alpha1.ClaimPreempting
+			if !inEffect || !cl.DeletionTimestamp.IsZero() || !st.Live {
 				continue
 			}
 			d := byName[cl.Status.DeviceName]

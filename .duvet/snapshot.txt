@@ -179,6 +179,9 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: If a device in that list has a `claimRef` with the claim UID and the UID
     TEXT[!MUST,implementation]: of the member's current `Member`, the controller MUST adopt that device
     TEXT[!MUST,implementation]: and MUST NOT bind another.
+    TEXT[!MUST,implementation]: Before it adopts a device, the controller MUST read the device again with
+    TEXT[!MUST,implementation]: a consistent read.
+    TEXT[!MUST,implementation,test]: It MUST adopt the device only if that read still shows the same `claimRef`.
     TEXT[!MUST,implementation,test]: The controller MUST NOT adopt a device whose `claimRef` has an older
     TEXT[!MUST,implementation,test]: member UID.
     TEXT[!MUST,implementation]: The controller MUST pick a device from the free devices that match the
@@ -256,6 +259,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: If the `Member` does not exist, the controller MUST create a new one.
     TEXT[!MUST,implementation,test]: After a join, the controller MUST set each claim with another
     TEXT[!MUST,implementation,test]: `status.memberUID` to `Lost` before it treats itself as live.
+    TEXT[!MUST,implementation,test]: This MUST include `Preempting` and `Preempted` claims, because they still
+    TEXT[!MUST,implementation,test]: hold a device.
 
   SECTION: [7.3. Renew](#7-3-renew)
     TEXT[!MUST,implementation]: A renew MUST be an update of `Member.status.renewTime`.
