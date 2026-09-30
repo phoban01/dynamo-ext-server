@@ -100,7 +100,7 @@ scene "3. A claim of priority 5 in b preempts a claim of priority 1 in a"
 k b apply -f "$manifests/urgent.yaml" >/dev/null
 victim=$(device_of a train)
 wait_for 30 "a/train Preempting" is_phase a train Preempting
-show a get devices "$victim"
+show a get devices "$victim" -o wide
 show a get deviceclaims -n work train
 say "a/train keeps $victim for its grace period of 10s, then lets it go."
 wait_for 60 "b/urgent Bound" is_phase b urgent Bound

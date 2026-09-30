@@ -32,9 +32,11 @@ seconds, so each scene takes seconds, not minutes.
 | 5 | The winner's node is paused for longer than its lease. The other cluster's sweeper deletes the winner's `Member` and frees its devices. The other `job` binds the H100 with token 2. When the winner wakes up, its workload still believes it holds the device and uses token 1. The device rejects it. | 6.6, 8 |
 | 6 | The winner's controller finds its `Member` gone. It joins again with a new UID, and its old claims become `Lost`. | 6.5, 7.2 |
 
-The device table shows the holder, its priority, the fencing token, and
-any preemption request. The claim table shows the phase, the device, the
-priority, the token, and when the member's lease ends.
+`kubectl get devices` shows whether each device is ready, and the member
+and claim that hold it. `-o wide` adds whether it is preemptible, and
+any preemption request. `kubectl get deviceclaims` shows the phase, the
+device, and when the member's lease ends. The fencing token and the
+priority are in the objects: `-o yaml` shows them.
 
 Scene 5 is the reason for fencing tokens (ADR 0008). The paused workload
 acts on an old view, and no clock check can stop it. The device sees the
