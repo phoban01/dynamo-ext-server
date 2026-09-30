@@ -4,3 +4,4 @@
 *.out
 /_output/
 /_apalache-out/
+/demo/k3d/.kube/

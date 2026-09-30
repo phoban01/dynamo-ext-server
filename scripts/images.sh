@@ -4,4 +4,5 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 docker build -q --target apiserver -t solas-apiserver:dev . >/dev/null
 docker build -q --target controller -t solas-controller:dev . >/dev/null
-echo "built solas-apiserver:dev and solas-controller:dev"
+docker build -q --target demo -t solas-demo:dev . >/dev/null
+echo "built solas-apiserver:dev, solas-controller:dev, and solas-demo:dev"

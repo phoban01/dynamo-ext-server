@@ -1,18 +1,10 @@
 #!/usr/bin/env bash
-# Runs the end-to-end tests. A lock makes a second run wait for the first,
-# because two runs at once can exhaust the memory of the development VM.
+# Runs the end-to-end tests against two k3d clusters. A lock makes a second
+# run wait for the first, because the clusters use a lot of memory.
 set -euo pipefail
-
-lock="${TMPDIR:-/tmp}/solas-e2e.lock"
-exec 9>"$lock"
-if ! flock -n 9; then
-  echo "e2e: another run holds $lock, waiting"
-  flock 9
-fi
-
-if [ ! -d test/e2e ]; then
-  echo "e2e: not built yet (milestone M7)"
-  exit 0
-fi
-
-go test -count=1 -timeout 30m ./test/e2e/...
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$root"
+# shellcheck source=scripts/k3d-lib.sh
+source scripts/k3d-lib.sh
+e2e_lock
+go test -tags e2e -count=1 -timeout 30m -v ./test/e2e/...

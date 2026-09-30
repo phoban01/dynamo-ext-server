@@ -47,8 +47,7 @@ cluster_create "$cluster" "$KUBECONFIG"
 
 step "build and load the images"
 scripts/images.sh >/dev/null
-image_import solas-apiserver:dev "$cluster"
-image_import solas-controller:dev "$cluster"
+image_import "$cluster" solas-apiserver:dev solas-controller:dev
 
 step "deploy dynamodb-local and the API server"
 kubectl apply -f deploy/apiserver/namespace.yaml >/dev/null
@@ -106,8 +105,9 @@ test "$(kubectl get member cluster-a -o jsonpath='{.spec.leaseDurationSeconds}/{
 step "deploy the controller as member smoke"
 kubectl apply -f deploy/controller/crd.yaml >/dev/null
 kubectl wait --for=condition=Established crd/deviceclaims.claims.solas.dev --timeout=60s >/dev/null
-kubectl -n solas-system create configmap solas-member --from-literal=clusterID=smoke >/dev/null
-kubectl apply -f deploy/controller/ >/dev/null
+kubectl -n solas-system create configmap solas-member --from-literal=clusterID=smoke \
+  --from-literal=leaseDuration=30s --from-literal=leaseMargin=3s --from-literal=sweepInterval=10s >/dev/null
+kubectl apply -f deploy/controller/crd.yaml -f deploy/controller/rbac.yaml -f deploy/controller/deployment.yaml >/dev/null
 kubectl -n solas-system rollout status deploy/solas-controller --timeout=120s >/dev/null
 for _ in $(seq 30); do kubectl get member smoke >/dev/null 2>&1 && break; sleep 1; done
 test "$(kubectl get member smoke -o jsonpath='{.status.phase}')" = Active

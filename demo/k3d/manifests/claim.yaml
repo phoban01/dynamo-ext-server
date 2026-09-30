@@ -1,0 +1,73 @@
+# A claim for any GPU, and a workload that uses the device with the claim's
+# fencing token. demo.sh fills in CLUSTER_ID and DEVICE_URL.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: work
+---
+apiVersion: claims.solas.dev/v1alpha1
+kind: DeviceClaim
+metadata:
+  name: job
+  namespace: work
+spec:
+  selector:
+    matchLabels: {kind: gpu}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workload
+  namespace: work
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: read-claims
+  namespace: work
+rules:
+  - apiGroups: ["claims.solas.dev"]
+    resources: ["deviceclaims"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workload-read-claims
+  namespace: work
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: read-claims
+subjects:
+  - kind: ServiceAccount
+    name: workload
+    namespace: work
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workload
+  namespace: work
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: workload}
+  template:
+    metadata:
+      labels: {app: workload}
+    spec:
+      serviceAccountName: workload
+      containers:
+        - name: workload
+          image: solas-demo:dev
+          imagePullPolicy: IfNotPresent
+          args:
+            - workload
+            - --namespace=work
+            - --claim=job
+            - --cluster-id=CLUSTER_ID
+            - --device=DEVICE_URL
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {memory: 64Mi}

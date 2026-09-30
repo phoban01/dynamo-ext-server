@@ -46,7 +46,26 @@ cluster_delete() {
   esac
 }
 
-# image_import <image> <cluster> loads a local image into the cluster.
+# image_import <cluster> <image>... loads local images into the cluster in
+# one call, then checks that the node has each one. k3d names its tarball
+# by the second, so imports in quick succession can collide; a missing
+# image is imported again.
 image_import() {
-  k3d image import "$1" --cluster "$2" >/dev/null 2>&1
+  local cluster=$1
+  shift
+  local node="k3d-$cluster-server-0" missing attempt
+  k3d image import "$@" --cluster "$cluster" >/dev/null 2>&1 || true
+  for attempt in 1 2 3; do
+    missing=()
+    for image in "$@"; do
+      docker exec "$node" crictl images -q "docker.io/library/$image" 2>/dev/null | grep -q . ||
+        missing+=("$image")
+    done
+    [ ${#missing[@]} -eq 0 ] && return 0
+    echo "image import: retry ${missing[*]} (attempt $attempt)" >&2
+    sleep 1
+    k3d image import "${missing[@]}" --cluster "$cluster" >/dev/null 2>&1 || true
+  done
+  echo "image import: ${missing[*]} not loaded into $cluster" >&2
+  return 1
 }
