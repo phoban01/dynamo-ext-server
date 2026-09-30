@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 # Shared functions for k3d clusters, ADR 0009. Source this file.
 
+# The scripts need the tools that devbox pins: this kubectl and k3d, and
+# openssl for the certificates. A script that starts outside devbox runs
+# itself again through devbox.
+if [ -z "${DEVBOX_SHELL_ENABLED:-}" ]; then
+  self=$0
+  # The scripts change to the repository root before they source this
+  # file, so a relative path is relative to the directory they left.
+  case $self in
+  /*) ;;
+  *) [ -f "$self" ] || self="${OLDPWD:-.}/$self" ;;
+  esac
+  exec devbox run -- "$(cd "$(dirname "$self")" && pwd)/$(basename "$self")" "$@"
+fi
+
 K3S_IMAGE=${K3S_IMAGE:-rancher/k3s:v1.37.0-k3s1}
 
 # e2e_lock waits for the lock that heavy runs share, see CLAUDE.md.

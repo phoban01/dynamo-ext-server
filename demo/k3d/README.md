@@ -11,7 +11,9 @@ devbox run demo        # build, bring up, and run every scene
 devbox run demo-down   # remove the clusters, the table, and the network
 ```
 
-`devbox run e2e` runs the same scenes as a Go test.
+`devbox run e2e` runs the same scenes as a Go test. `demo/k3d/demo.sh`
+and `demo/k3d/down.sh` also work on their own: outside devbox, they run
+themselves again through devbox, which has the tools they need.
 
 The demo needs Docker and about 2 GB of free memory. It uses k3d
 (ADR 0009) and `amazon/dynamodb-local` (ADR 0007). The setup runs
