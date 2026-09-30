@@ -1,5 +1,5 @@
-// Package controller builds solas-controller: the member manager, the
-// claim reconciler, and the sweeper, spec sections 6 to 8.
+// Package controller builds the controller part of solas: the member
+// manager, the claim reconciler, and the sweeper, spec sections 6 to 8.
 package controller
 
 import (
@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
-// Options holds the settings of solas-controller.
+// Options holds the settings of the controller part.
 type Options struct {
 	// ClusterID names this member cluster. It is the name of its Member.
 	ClusterID string
