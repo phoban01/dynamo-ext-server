@@ -19,10 +19,8 @@ cleanup() {
     echo "smoke: FAILED; pods and events:"
     kubectl -n solas-system get pods -o wide 2>/dev/null || true
     kubectl -n solas-system get events --sort-by=.lastTimestamp 2>/dev/null | tail -15 || true
-    echo "smoke: logs of the controller:"
-    kubectl -n solas-system logs deploy/solas-controller --tail=30 2>/dev/null || true
-    echo "smoke: logs of the API server:"
-    kubectl -n solas-system logs deploy/solas-apiserver --tail=50 2>/dev/null || true
+    echo "smoke: logs of solas:"
+    kubectl -n solas-system logs deploy/solas --tail=80 2>/dev/null || true
   fi
   cluster_delete "$cluster"
   rm -rf "$work"
@@ -47,16 +45,13 @@ cluster_create "$cluster" "$KUBECONFIG"
 
 step "build and load the images"
 scripts/images.sh >/dev/null
-image_import "$cluster" solas-apiserver:dev solas-controller:dev
+image_import "$cluster" solas:dev
 
-step "deploy dynamodb-local and the API server"
-kubectl apply -f deploy/apiserver/namespace.yaml >/dev/null
+step "deploy dynamodb-local and solas as member smoke"
+kubectl apply -f deploy/solas/namespace.yaml >/dev/null
 kubectl apply -f deploy/dynamodb-local/ >/dev/null
-kubectl apply -f deploy/apiserver/ >/dev/null
-hack/gen-certs.sh >/dev/null
 kubectl -n solas-system rollout status deploy/dynamodb-local --timeout=180s >/dev/null
-kubectl -n solas-system rollout status deploy/solas-apiserver --timeout=180s >/dev/null
-kubectl wait --for=condition=Available apiservice/v1alpha1.solas.dev --timeout=120s >/dev/null
+solas_install smoke http://dynamodb-local.solas-system.svc:8000
 
 step "create and list a device"
 kubectl apply -f - >/dev/null <<YAML
@@ -70,8 +65,22 @@ YAML
 kubectl get devices
 kubectl get device d1 -o jsonpath='{.metadata.resourceVersion}{"\n"}' | grep -qx '[0-9]\+'
 
+step "create a member"
+kubectl apply -f - >/dev/null <<YAML
+apiVersion: solas.dev/v1alpha1
+kind: Member
+metadata:
+  name: cluster-a
+YAML
+test "$(kubectl get member cluster-a -o jsonpath='{.spec.leaseDurationSeconds}/{.status.phase}')" = "30/Active"
+# The claimRefs below name cluster-a with its real UID. The sweeper of
+# member smoke clears a claimRef whose member UID it does not know. It
+# leaves cluster-a alone until its lease of 30s has passed, and the steps
+# below take less than that.
+uid_a=$(kubectl get member cluster-a -o jsonpath='{.metadata.uid}')
+
 ref() {
-  printf '{"status":{"claimRef":{"member":"a","memberUID":"m1","namespace":"ns","name":"%s","uid":"u-%s"}}}' "$1" "$1"
+  printf '{"status":{"claimRef":{"member":"cluster-a","memberUID":"%s","namespace":"ns","name":"%s","uid":"u-%s"}}}' "$uid_a" "$1" "$1"
 }
 
 step "bind d1 to claim c1"
@@ -93,22 +102,7 @@ step "release d1, then delete it"
 kubectl patch device d1 --subresource=status --type=merge -p '{"status":{"claimRef":null}}' >/dev/null
 kubectl delete device d1 >/dev/null
 
-step "create a member"
-kubectl apply -f - >/dev/null <<YAML
-apiVersion: solas.dev/v1alpha1
-kind: Member
-metadata:
-  name: cluster-a
-YAML
-test "$(kubectl get member cluster-a -o jsonpath='{.spec.leaseDurationSeconds}/{.status.phase}')" = "30/Active"
-
-step "deploy the controller as member smoke"
-kubectl apply -f deploy/controller/crd.yaml >/dev/null
-kubectl wait --for=condition=Established crd/deviceclaims.claims.solas.dev --timeout=60s >/dev/null
-kubectl -n solas-system create configmap solas-member --from-literal=clusterID=smoke \
-  --from-literal=leaseDuration=30s --from-literal=leaseMargin=3s --from-literal=sweepInterval=10s >/dev/null
-kubectl apply -f deploy/controller/crd.yaml -f deploy/controller/rbac.yaml -f deploy/controller/deployment.yaml >/dev/null
-kubectl -n solas-system rollout status deploy/solas-controller --timeout=120s >/dev/null
+step "the controller part joined as member smoke"
 for _ in $(seq 30); do kubectl get member smoke >/dev/null 2>&1 && break; sleep 1; done
 test "$(kubectl get member smoke -o jsonpath='{.status.phase}')" = Active
 

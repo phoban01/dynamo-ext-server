@@ -1,0 +1,12 @@
+# The shared table. Every member cluster points at the same endpoint.
+# These values are for amazon/dynamodb-local. Create this Secret before
+# the Deployment.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: solas-dynamodb
+  namespace: solas-system
+stringData:
+  endpoint: http://dynamodb-local.solas-system.svc:8000
+  accessKeyID: local
+  secretAccessKey: local

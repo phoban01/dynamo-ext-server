@@ -1,22 +1,26 @@
+# One Deployment runs solas, ADR 0012. Every replica serves the API. Only
+# the replica that holds the leader election lease runs the controller
+# part. It needs the ConfigMap solas-member, the Secret solas-dynamodb
+# (see config/), and the Secret solas-tls from hack/gen-certs.sh.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: solas-apiserver
+  name: solas
   namespace: solas-system
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: solas-apiserver
+      app: solas
   template:
     metadata:
       labels:
-        app: solas-apiserver
+        app: solas
     spec:
-      serviceAccountName: solas-apiserver
+      serviceAccountName: solas
       containers:
-        - name: apiserver
-          image: solas-apiserver:dev
+        - name: solas
+          image: solas:dev
           imagePullPolicy: IfNotPresent
           args:
             - --secure-port=8443
@@ -25,6 +29,10 @@ spec:
             - --dynamodb-endpoint=$(DYNAMODB_ENDPOINT)
             - --dynamodb-table=solas
             - --dynamodb-create-table
+            - --cluster-id=$(CLUSTER_ID)
+            - --lease-duration=$(LEASE_DURATION)
+            - --lease-margin=$(LEASE_MARGIN)
+            - --sweep-interval=$(SWEEP_INTERVAL)
           env:
             # The endpoint and credentials come from this Secret, so each
             # member cluster can point at the shared table.
@@ -37,15 +45,30 @@ spec:
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef: {name: solas-dynamodb, key: secretAccessKey}
+            # Each member cluster sets its own ID in this ConfigMap.
+            - name: CLUSTER_ID
+              valueFrom:
+                configMapKeyRef: {name: solas-member, key: clusterID}
+            - name: LEASE_DURATION
+              valueFrom:
+                configMapKeyRef: {name: solas-member, key: leaseDuration}
+            - name: LEASE_MARGIN
+              valueFrom:
+                configMapKeyRef: {name: solas-member, key: leaseMargin}
+            - name: SWEEP_INTERVAL
+              valueFrom:
+                configMapKeyRef: {name: solas-member, key: sweepInterval}
           ports:
             - containerPort: 8443
+          # The probes check the API server part. When the controller part
+          # stops, the process exits.
           readinessProbe:
             httpGet: {path: /readyz, port: 8443, scheme: HTTPS}
           livenessProbe:
             httpGet: {path: /livez, port: 8443, scheme: HTTPS}
           resources:
-            requests: {cpu: 50m, memory: 64Mi}
-            limits: {memory: 256Mi}
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {memory: 384Mi}
           volumeMounts:
             - name: certs
               mountPath: /certs
@@ -53,16 +76,16 @@ spec:
       volumes:
         - name: certs
           secret:
-            secretName: solas-apiserver-tls
+            secretName: solas-tls
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: solas-apiserver
+  name: solas
   namespace: solas-system
 spec:
   selector:
-    app: solas-apiserver
+    app: solas
   ports:
     - port: 443
       targetPort: 8443
