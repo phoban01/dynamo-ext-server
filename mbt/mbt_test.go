@@ -1,31 +1,28 @@
 package mbt
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/phoban01/solas/internal/ddbtest"
+	"github.com/phoban01/solas/internal/teststore"
 	"github.com/phoban01/solas/pkg/apiserver"
-	"github.com/phoban01/solas/pkg/storage/dynamo"
 )
 
+// newDriver returns a driver on an empty store. MBT_STORE picks the store:
+// dynamodb, the default, or etcd.
 func newDriver(t *testing.T) *Driver {
 	t.Helper()
-	c := ddbtest.Client(t)
-	table := ddbtest.TableName(t)
-	ddbtest.DeleteTable(t, c, table)
-	if err := dynamo.EnsureTable(context.Background(), c, table); err != nil {
-		t.Fatal(err)
+	var g apiserver.RESTOptionsGetter
+	switch s := os.Getenv("MBT_STORE"); s {
+	case "", "dynamodb":
+		g = teststore.Dynamo(t)
+	case "etcd":
+		g = teststore.Etcd(t)
+	default:
+		t.Fatalf("MBT_STORE=%q is not dynamodb or etcd", s)
 	}
-	d, stop, err := NewDriver(apiserver.RESTOptionsGetter{
-		Dynamo:          dynamo.Config{Client: c, Table: table, PollInterval: 20 * time.Millisecond},
-		Codec:           apiserver.StorageCodec(),
-		EncodeVersioner: apiserver.StorageVersioner(),
-		Prefix:          "/registry",
-	})
+	d, stop, err := NewDriver(g)
 	if err != nil {
 		t.Fatal(err)
 	}
