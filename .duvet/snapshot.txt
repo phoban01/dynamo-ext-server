@@ -83,13 +83,14 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST]: resource, in order, or it MUST fail with `410 Gone`.
 
   SECTION: [2.6. Storage URL](#2-6-storage-url)
-    TEXT[!MUST]: The store MUST be a setting of the API server, in the form of one
-    TEXT[!MUST]: storage URL.
-    TEXT[!MUST]: A URL with the scheme `dynamodb` MUST select the DynamoDB store.
-    TEXT[!MUST]: A URL with the scheme `etcd` MUST select the etcd store.
-    TEXT[!MUST]: The server MUST reject a storage URL with another scheme.
-    TEXT[!MUST]: The server MUST reject a storage URL with a query key that this section
-    TEXT[!MUST]: does not name for its scheme.
+    TEXT[!MUST,implementation]: The store MUST be a setting of the API server, in the form of one
+    TEXT[!MUST,implementation]: storage URL.
+    TEXT[!MUST,implementation,test]: A URL with the scheme `dynamodb` MUST select the DynamoDB store.
+    TEXT[implementation]: An empty table name selects the default table name.
+    TEXT[!MUST,implementation,test]: A URL with the scheme `etcd` MUST select the etcd store.
+    TEXT[!MUST,implementation,test]: The server MUST reject a storage URL with another scheme.
+    TEXT[!MUST,implementation,test]: The server MUST reject a storage URL with a query key that this section
+    TEXT[!MUST,implementation,test]: does not name for its scheme.
     TEXT[!MUST]: All member clusters MUST use the same store.
 
   SECTION: [2.7. etcd store](#2-7-etcd-store)
