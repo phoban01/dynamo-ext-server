@@ -58,7 +58,14 @@ set_ready() {
 device_log() { curl -s "$device_url/log"; }
 uses_by() { device_log | grep -q "\"claim\":\"$1/work/job\",\"token\":$2,\"accepted\":$3"; }
 
-scene "Setup: two k3d clusters and one table (log: $setup_log)"
+# SOLAS_STORE picks the shared store: dynamodb, the default, or etcd.
+store=${SOLAS_STORE:-dynamodb}
+case $store in
+dynamodb | etcd) ;;
+*) fail "SOLAS_STORE=$store is not dynamodb or etcd" ;;
+esac
+
+scene "Setup: two k3d clusters that share one $store store (log: $setup_log)"
 : >"$setup_log"
 quiet() { "$@" >>"$setup_log" 2>&1 || fail "$*; see $setup_log"; }
 quiet scripts/images.sh

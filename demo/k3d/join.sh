@@ -12,7 +12,9 @@ name=${1:?usage: join.sh <name>}
 cluster=e2e-$name
 kube=demo/k3d/.kube/$name
 mkdir -p demo/k3d/.kube
-endpoint=$(demo/k3d/mesh.sh endpoint)
+# SOLAS_STORE picks the shared store: dynamodb, the default, or etcd.
+store=${SOLAS_STORE:-dynamodb}
+url=$(demo/k3d/mesh.sh url "$store")
 say() { echo "[$name] $*"; }
 
 if ! k3d cluster get "$cluster" >/dev/null 2>&1; then
@@ -25,7 +27,6 @@ export KUBECONFIG="$root/$kube"
 say "load images"
 image_import "$cluster" solas:dev solas-demo:dev
 
-url="dynamodb://solas?create-table=true&endpoint=$endpoint"
 say "install solas as member $name, store $url"
 # A short lease, so the demo scenes take seconds.
 solas_install "$name" "$url" 10s 1s 3s
