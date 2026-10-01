@@ -26,9 +26,7 @@ spec:
             - --secure-port=8443
             - --tls-cert-file=/certs/tls.crt
             - --tls-private-key-file=/certs/tls.key
-            - --dynamodb-endpoint=$(DYNAMODB_ENDPOINT)
-            - --dynamodb-table=solas
-            - --dynamodb-create-table
+            - --storage-url=dynamodb://solas?create-table=true&endpoint=$(DYNAMODB_ENDPOINT)
             - --cluster-id=$(CLUSTER_ID)
             - --lease-duration=$(LEASE_DURATION)
             - --lease-margin=$(LEASE_MARGIN)
