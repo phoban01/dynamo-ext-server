@@ -94,10 +94,10 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST]: All member clusters MUST use the same store.
 
   SECTION: [2.7. etcd store](#2-7-etcd-store)
-    TEXT[!MUST]: The etcd store MUST use the etcd3 storage of `k8s.io/apiserver`.
-    TEXT[!MUST]: The etcd store MUST keep each object under the storage prefix of the API
-    TEXT[!MUST]: server.
-    TEXT[!MUST]: Every read of the etcd store MUST be a linearizable read.
+    TEXT[!MUST,implementation,test]: The etcd store MUST use the etcd3 storage of `k8s.io/apiserver`.
+    TEXT[!MUST,implementation]: The etcd store MUST keep each object under the storage prefix of the API
+    TEXT[!MUST,implementation]: server.
+    TEXT[!MUST,implementation]: Every read of the etcd store MUST be a linearizable read.
 
   SECTION: [3.1. Issue](#3-1-issue)
     TEXT[!MUST,implementation]: Each resource MUST have its own counter item.

@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/registry/generic"
+	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/storage"
 	cacherstorage "k8s.io/apiserver/pkg/storage/cacher"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
@@ -20,11 +21,14 @@ import (
 // at least 75 seconds.
 const eventsHistoryWindow = 5 * time.Minute
 
-// RESTOptionsGetter gives each resource a DynamoDB store behind the watch
-// cache.
+// RESTOptionsGetter gives each resource a store behind the watch cache:
+// the DynamoDB store, or the etcd store when EtcdServers is set, spec 2.6.
 type RESTOptionsGetter struct {
 	Dynamo dynamo.Config
-	Codec  runtime.Codec
+	// EtcdServers holds the etcd client URLs. When it is set, the getter
+	// picks the etcd store and ignores Dynamo.
+	EtcdServers []string
+	Codec       runtime.Codec
 	// EncodeVersioner picks the version that objects are stored in.
 	EncodeVersioner runtime.GroupVersioner
 	// Prefix separates the data of different API servers in one table.
@@ -35,6 +39,9 @@ var _ generic.RESTOptionsGetter = RESTOptionsGetter{}
 
 // GetRESTOptions returns the options for one resource.
 func (g RESTOptionsGetter) GetRESTOptions(resource schema.GroupResource, _ runtime.Object) (generic.RESTOptions, error) {
+	if len(g.EtcdServers) > 0 {
+		return g.etcdOptions(resource), nil
+	}
 	return generic.RESTOptions{
 		StorageConfig: &storagebackend.ConfigForResource{
 			Config: storagebackend.Config{
@@ -100,5 +107,33 @@ func (g RESTOptionsGetter) decorator() generic.StorageDecorator {
 			})
 		}
 		return delegator, destroy, nil
+	}
+}
+
+//= spec/solas.md#2-7-etcd-store
+//# The etcd store MUST use the etcd3 storage of `k8s.io/apiserver`.
+
+//= spec/solas.md#2-7-etcd-store
+//# The etcd store MUST keep each object under the storage prefix of the API
+//# server.
+
+//= spec/solas.md#2-7-etcd-store
+//# Every read of the etcd store MUST be a linearizable read.
+
+// etcdOptions returns the options of the etcd store for one resource: the
+// etcd3 storage behind the watch cache, as the kube-apiserver uses it. The
+// etcd3 storage reads with linearizable reads, the etcd default.
+func (g RESTOptionsGetter) etcdOptions(resource schema.GroupResource) generic.RESTOptions {
+	cfg := storagebackend.NewDefaultConfig(g.Prefix, g.Codec)
+	cfg.Type = storagebackend.StorageTypeETCD3
+	cfg.EncodeVersioner = g.EncodeVersioner
+	cfg.Transport.ServerList = g.EtcdServers
+	return generic.RESTOptions{
+		StorageConfig:           cfg.ForResource(resource),
+		Decorator:               genericregistry.StorageWithCacher(),
+		EnableGarbageCollection: true,
+		DeleteCollectionWorkers: 1,
+		ResourcePrefix:          "/" + resource.Group + "/" + resource.Resource,
+		CountMetricPollPeriod:   time.Minute,
 	}
 }
