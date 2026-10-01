@@ -51,10 +51,16 @@ const maxCounterRetries = 200
 // version.
 func (s *store) commit(ctx context.Context, w write) (uint64, error) {
 	for attempt := 0; ; attempt++ {
-		n, err := s.readCounter(ctx)
+		n, sealed, err := s.readCounterSealed(ctx)
 		if err != nil {
 			return 0, err
 		}
+		//= spec/solas.md#12-1-seal
+		//# A sealed store MUST reject every write.
+		if sealed {
+			return 0, errSealed(s.resource)
+		}
+
 		//= spec/solas.md#3-1-issue
 		//# Each write MUST get a resource version exactly one more than the
 		//# previous write to the same resource.
@@ -120,12 +126,19 @@ func (s *store) counterAction(n, next uint64) types.TransactWriteItem {
 	//= spec/solas.md#2-3-writes
 	//# The counter update MUST set `n` to `n + 1` on condition that `n` still
 	//# has the value that the server read.
+
+	//= spec/solas.md#12-1-seal
+	//# A write MUST fail when the counter item of its resource has the
+	//# attribute `sealed`.
+	//
+	// The seal check is part of the counter condition, so a write cannot
+	// commit after the seal, even when it read the counter before it.
 	return types.TransactWriteItem{Update: &types.Update{
 		TableName:                 aws.String(s.table),
 		Key:                       key,
 		UpdateExpression:          aws.String("SET #n = :next"),
-		ConditionExpression:       aws.String("#n = :cur"),
-		ExpressionAttributeNames:  map[string]string{"#n": attrN},
+		ConditionExpression:       aws.String("#n = :cur AND attribute_not_exists(#sealed)"),
+		ExpressionAttributeNames:  map[string]string{"#n": attrN, "#sealed": attrSealed},
 		ExpressionAttributeValues: map[string]types.AttributeValue{":next": num(next), ":cur": num(n)},
 	}}
 }
@@ -231,27 +244,11 @@ func (s *store) eventAction(w write, next uint64) types.TransactWriteItem {
 }
 
 // readCounter returns the last issued resource version. It creates the
-// counter when it does not exist.
+// counter when it does not exist. Lists and watches read a sealed counter
+// as any other, because a sealed store serves reads, spec 12.1.
 func (s *store) readCounter(ctx context.Context) (uint64, error) {
-	for {
-		pk, sk := s.counterKey()
-		out, err := s.client.GetItem(ctx, &dynamodb.GetItemInput{
-			TableName: aws.String(s.table),
-			Key:       map[string]types.AttributeValue{attrPK: str(pk), attrSK: str(sk)},
-			//= spec/solas.md#2-4-reads
-			//# Every read of a counter item MUST be a strongly consistent read.
-			ConsistentRead: aws.Bool(true),
-		})
-		if err != nil {
-			return 0, fmt.Errorf("read counter: %w", err)
-		}
-		if out.Item != nil {
-			return numAttr(out.Item, attrN)
-		}
-		if err := s.initCounter(ctx); err != nil {
-			return 0, err
-		}
-	}
+	n, _, err := s.readCounterSealed(ctx)
+	return n, err
 }
 
 // initCounter creates the counter at 1 with an INIT event at version 1.

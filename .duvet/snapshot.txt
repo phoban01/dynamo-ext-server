@@ -464,15 +464,18 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: that does not exist, as it does for a `claimRef`, spec 6.4.
 
   SECTION: [12.1. Seal](#12-1-seal)
-    TEXT[!MUST]: A sealed store MUST reject every write.
-    TEXT[!MUST]: A sealed store MUST serve reads.
-    TEXT[!MUST]: A seal MUST NOT change any object.
-    TEXT[!MUST]: A write MUST fail when the counter item of its resource has the
-    TEXT[!MUST]: attribute `sealed`.
-    TEXT[!MUST]: To seal a resource that has no counter item, the tool MUST create the
-    TEXT[!MUST]: counter item with the attribute `sealed`.
-    TEXT[!MUST]: A write that fails because the store is sealed MUST return
-    TEXT[!MUST]: `503 ServiceUnavailable`.
+    TEXT[!MUST,implementation,test]: A sealed store MUST reject every write.
+    TEXT[!MUST,test]: A sealed store MUST serve reads.
+    TEXT[!MUST,implementation]: A seal MUST NOT change any object.
+    TEXT[implementation]: The DynamoDB store seals with the attribute `sealed` on the counter item
+    TEXT[implementation]: of each resource.
+    TEXT[!MUST,implementation]: A write MUST fail when the counter item of its resource has the
+    TEXT[!MUST,implementation]: attribute `sealed`.
+    TEXT[!MUST,implementation,test]: To seal a resource that has no counter item, the tool MUST create the
+    TEXT[!MUST,implementation,test]: counter item with the attribute `sealed`.
+    TEXT[!MUST,implementation,test]: A write that fails because the store is sealed MUST return
+    TEXT[!MUST,implementation,test]: `503 ServiceUnavailable`.
+    TEXT[implementation,test]: An unseal removes the attribute `sealed`.
     TEXT[!MUST]: The tool MUST NOT unseal a source when the destination differs from it,
     TEXT[!MUST]: except in resource versions.
 

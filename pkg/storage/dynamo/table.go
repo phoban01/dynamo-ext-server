@@ -22,6 +22,8 @@ const (
 	attrType    = "type"
 	attrKey     = "key"
 	attrExpires = "expires"
+	// attrSealed marks a sealed counter item, spec 12.1.
+	attrSealed = "sealed"
 
 	// eventInit is the type of the event that creates a counter.
 	eventInit = "INIT"
