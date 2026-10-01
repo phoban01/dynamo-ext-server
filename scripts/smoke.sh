@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Smoke test: one k3d cluster serves kubectl get devices from dynamodb-local.
-# It takes the e2e lock, because heavy runs must not overlap.
+# Smoke test: one k3d cluster serves kubectl get devices from one store in
+# the cluster. SOLAS_STORE picks it: dynamodb (dynamodb-local, the default)
+# or etcd. It takes the e2e lock, because heavy runs must not overlap.
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -47,11 +48,26 @@ step "build and load the images"
 scripts/images.sh >/dev/null
 image_import "$cluster" solas:dev
 
-step "deploy dynamodb-local and solas as member smoke"
+store=${SOLAS_STORE:-dynamodb}
+step "deploy one $store and solas as member smoke"
 kubectl apply -f deploy/solas/namespace.yaml >/dev/null
-kubectl apply -f deploy/dynamodb-local/ >/dev/null
-kubectl -n solas-system rollout status deploy/dynamodb-local --timeout=180s >/dev/null
-solas_install smoke "dynamodb://solas?create-table=true&endpoint=http://dynamodb-local.solas-system.svc:8000"
+case $store in
+dynamodb)
+  kubectl apply -f deploy/dynamodb-local/ >/dev/null
+  kubectl -n solas-system rollout status deploy/dynamodb-local --timeout=180s >/dev/null
+  url="dynamodb://solas?create-table=true&endpoint=http://dynamodb-local.solas-system.svc:8000"
+  ;;
+etcd)
+  kubectl apply -f deploy/etcd/ >/dev/null
+  kubectl -n solas-system rollout status deploy/etcd --timeout=180s >/dev/null
+  url="etcd://etcd.solas-system.svc:2379"
+  ;;
+*)
+  echo "smoke: SOLAS_STORE=$store is not dynamodb or etcd"
+  exit 1
+  ;;
+esac
+solas_install smoke "$url"
 
 step "create and list a device"
 kubectl apply -f - >/dev/null <<YAML
