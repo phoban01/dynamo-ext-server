@@ -297,8 +297,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
 
   SECTION: [7.3. Renew](#7-3-renew)
     TEXT[!MUST,implementation]: A renew MUST be an update of `Member.status.renewTime`.
-    TEXT[!MUST,implementation]: The renew MUST carry the resource version that the member last read or
-    TEXT[!MUST,implementation]: wrote.
+    TEXT[!MUST,implementation,test]: The renew MUST carry the resource version that the member last read or
+    TEXT[!MUST,implementation,test]: wrote.
     TEXT[!MUST,implementation,test]: After a `404 NotFound`, the member MUST join again as section 7.2
     TEXT[!MUST,implementation,test]: describes.
     TEXT[!SHOULD,implementation]: A member SHOULD renew every `D / 3`.
