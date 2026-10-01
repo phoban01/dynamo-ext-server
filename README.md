@@ -31,6 +31,10 @@ On DynamoDB, the AWS credentials come from the environment or from the
 same Secret. [docs/store-contract.md](docs/store-contract.md) shows what
 the protocol needs from a store, and how each store keeps it.
 
+To move a running mesh to another store, see
+[docs/migrate.md](docs/migrate.md): `solas migrate` seals the old store,
+copies, and verifies, and each cluster then gets the new URL.
+
 ## Tests
 
 `devbox run verify` runs the unit tests, the Quint model checks, the

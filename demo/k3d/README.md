@@ -43,6 +43,7 @@ every 3 seconds, so each scene takes seconds, not minutes.
 | 4 | Claims `job` in `a` and in `b` race for `gpu-h100-1`. One wins with token 1. The other stays `Pending`. | 5.3, 6.3 |
 | 5 | The winner's node is paused for longer than its lease. The other cluster's sweeper deletes the winner's `Member` and frees its devices. The other `job` binds the H100 with token 2. When the winner wakes up, its workload still believes it holds the device and uses token 1. The device rejects it. | 6.6, 8 |
 | 6 | The winner's controller finds its `Member` gone. It joins again with a new UID, and its old claims become `Lost`. | 6.5, 7.2 |
+| 7 | The mesh moves to the other store with one setting. `solas migrate` seals dynamodb-local, copies every `Device` and `Member` to etcd, and verifies the copy. A write to the sealed store fails. Then each cluster gets the new `url` in the Secret `solas-storage`, and solas restarts. Every holder and fencing token is the same, and a new claim binds on etcd. [docs/migrate.md](../../docs/migrate.md) has the steps for a real mesh. | 12 |
 
 The device table shows the holder, its priority, the fencing token, and
 any preemption request. The claim table shows the phase, the device, the
@@ -66,6 +67,9 @@ higher token first, so it rejects the lower one.
   the table container `solas-ddb`, and the etcd container `solas-etcd`.
 - `join.sh <name>`: the k3d cluster `e2e-<name>`, with solas deployed.
   Its kubeconfig goes to `demo/k3d/.kube/<name>`.
+- `switch-store.sh [copy|point] etcd|dynamodb`: moves the mesh to the other
+  store. `copy` runs `solas migrate`; `point` sets the new storage URL in
+  each cluster and restarts solas.
 - `demo.sh`: the scenes above, with a check after each one.
 - `down.sh`: removes everything.
 
