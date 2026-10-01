@@ -503,3 +503,5 @@ SPECIFICATION: [Solas specification](spec/solas.md)
   SECTION: [12.4. Switch](#12-4-switch)
     TEXT[!SHOULD]: Each member cluster SHOULD switch to the destination within `D` of the
     TEXT[!SHOULD]: seal.
+    TEXT[test]: On the destination, the member renews its `Member`, which has the same
+    TEXT[test]: UID, spec 7.2, and its claims go back to `Bound`.
