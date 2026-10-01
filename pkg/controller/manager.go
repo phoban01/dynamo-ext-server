@@ -29,6 +29,11 @@ func Run(ctx context.Context, cfg *rest.Config, o *Options) error {
 		LeaderElection:          o.LeaderElection,
 		LeaderElectionID:        "solas-controller",
 		LeaderElectionNamespace: o.LeaderElectionNS,
+		// A stopping process gives up the lease at once, after its
+		// controllers stop, so a restarted Pod takes over without waiting for
+		// the lease to expire. A move to another store restarts every member,
+		// and each must renew within D, spec 12.4.
+		LeaderElectionReleaseOnCancel: true,
 	})
 	if err != nil {
 		return err

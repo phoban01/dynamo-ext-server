@@ -55,6 +55,7 @@ for f in quint/*.qnt quint/negative/*.qnt; do
 done
 
 pass "test solas2" quint test quint/solas.qnt --main solas2
+pass "test migrate2" quint test quint/migrate.qnt --main migrate2
 # The test passes when its scenario breaks claimMatchesDevice.
 pass "negative adopt-any-uid" quint test quint/negative/adopt-any-uid.qnt \
   --main adopt_any_uid
@@ -66,18 +67,28 @@ pass "negative no-token-check" quint test quint/negative/no-token-check.qnt \
 pass "negative force-clear" quint test quint/negative/force-clear.qnt \
   --main force_clear
 
+# The test passes when a copy with no seal breaks noDoubleBind.
+pass "negative no-seal" quint test quint/negative/no-seal.qnt --main no_seal \
+  --match doubleBindTest
+
 pass "run solas2 safety" run quint/solas.qnt --main solas2 --invariant safety
 # Fencing does not depend on the lease margin: it holds even when M = 0.
 pass "run no-margin fencing" run quint/negative/no-margin.qnt --invariant fencing
 pass "run store3 storeSafety" run quint/store.qnt --main store3 --invariant storeSafety
+pass "run migrate2 migrateSafety" run quint/migrate.qnt --main migrate2 --invariant migrateSafety
 
 for w in witnessBound witnessCleared witnessLost witnessLeft; do
   violate "witness solas2 $w" run quint/solas.qnt --main solas2 --invariant "$w"
+done
+for w in witnessSwitched witnessBoundOnDst; do
+  violate "witness migrate2 $w" run quint/migrate.qnt --main migrate2 --invariant "$w"
 done
 for w in witnessDelivered witnessGone witnessListed; do
   violate "witness store3 $w" run quint/store.qnt --main store3 --invariant "$w"
 done
 
+violate "negative no-seal run" \
+  run quint/negative/no-seal.qnt --invariant noDoubleBind
 violate "negative list-no-recheck" \
   run quint/negative/list-no-recheck.qnt --invariant listSnapshot
 violate "negative watch-no-gap-check" \
@@ -92,6 +103,8 @@ if [ "$verify" = 1 ]; then
     quint/negative/members-first.qnt --invariant claimMatchesDevice --max-steps 10
   pass "verify solas2 safety depth $depth" quint verify quint/solas.qnt \
     --main solas2 --invariant safety --max-steps "$depth"
+  pass "verify migrate2 migrateSafety depth 10" quint verify quint/migrate.qnt \
+    --main migrate2 --invariant migrateSafety --max-steps 10
   pass "verify store3 storeSafety depth 12" quint verify quint/store.qnt \
     --main store3 --invariant storeSafety --max-steps 12
 else

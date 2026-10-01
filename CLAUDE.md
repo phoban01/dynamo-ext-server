@@ -87,6 +87,9 @@ Claude Code session, so heavy jobs must not overlap.
 - One flag, `--storage-url`, picks the shared store: a DynamoDB table or
   an etcd cluster
   ([docs/adr/0014-storage-url.md](docs/adr/0014-storage-url.md)).
+- `solas migrate` moves the data to another store: it seals the source,
+  copies, and verifies
+  ([docs/adr/0015-migration.md](docs/adr/0015-migration.md)).
 
 ## Writing
 

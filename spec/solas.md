@@ -756,3 +756,70 @@ The sweeper MUST clear a request whose member UID is not in the member
 list, as it does for a `claimRef`, spec 8.3.
 The controller MUST clear a request that names its own member and a claim
 that does not exist, as it does for a `claimRef`, spec 6.4.
+
+## 12. Migration
+
+A mesh can move from one store to another, ADR 0015. The tool seals the
+source, copies every `Device` and `Member`, and verifies the copy. Then
+each member cluster changes its storage URL, spec 2.6.
+
+### 12.1. Seal
+
+A sealed store MUST reject every write.
+A sealed store MUST serve reads.
+A seal MUST NOT change any object.
+
+The DynamoDB store seals with the attribute `sealed` on the counter item
+of each resource.
+A write MUST fail when the counter item of its resource has the
+attribute `sealed`.
+The condition on the counter update of each write, spec 2.3, holds this
+check, so a write cannot commit after the seal.
+To seal a resource that has no counter item, the tool MUST create the
+counter item with the attribute `sealed`.
+A write that fails because the store is sealed MUST return
+`503 ServiceUnavailable`.
+
+An unseal removes the attribute `sealed`.
+The tool MUST NOT unseal a source when the destination holds an object
+that is not in the source, or that differs from its source object except
+in resource version.
+Such an object shows that a cluster wrote to the destination.
+A destination that holds part of a copy, or nothing, does not stop an
+unseal.
+
+### 12.2. Copy
+
+The tool MUST seal the source before it reads it.
+The tool MUST NOT copy into a store that holds a `Device` or a `Member`.
+The tool MUST copy at the storage level, not through the API server.
+The status strategy of a `Device` sets the fencing token on each bind,
+spec 5.3, so a copy through the API server would change the tokens.
+The copy MUST keep the name, UID, labels, annotations, spec, status, and
+creation time of each object.
+The copy MUST NOT keep the resource version.
+The destination gives each object a new resource version.
+After the copy, the tool MUST verify that each object in the destination
+equals its source, except for the resource version.
+
+### 12.3. A store that cannot be sealed
+
+The etcd store has no counter item, so the tool cannot seal it.
+Before a move from such a store, the operator MUST stop solas in every
+member cluster.
+The tool MUST then list the `Member` objects, wait `D` by its own clock,
+and list them again.
+The tool MUST NOT copy when a `Member` renewed in that time, or when a
+`Device` or a `Member` changed.
+
+### 12.4. Switch
+
+Each member cluster SHOULD switch to the destination within `D` of the
+seal.
+A cluster that cannot write to its store does not renew, so by its own
+clock its claims stop being in effect, spec 6.5.
+On the destination, the member renews its `Member`, which has the same
+UID, spec 7.2, and its claims go back to `Bound`.
+A cluster that switches later than `D` finds that the other members
+swept its `Member`, spec 8.
+It joins again, and its claims become `Lost`, spec 6.5.

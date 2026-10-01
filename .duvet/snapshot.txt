@@ -462,3 +462,46 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation,test]: list, as it does for a `claimRef`, spec 8.3.
     TEXT[!MUST,implementation]: The controller MUST clear a request that names its own member and a claim
     TEXT[!MUST,implementation]: that does not exist, as it does for a `claimRef`, spec 6.4.
+
+  SECTION: [12.1. Seal](#12-1-seal)
+    TEXT[!MUST,implementation,test]: A sealed store MUST reject every write.
+    TEXT[!MUST,test]: A sealed store MUST serve reads.
+    TEXT[!MUST,implementation]: A seal MUST NOT change any object.
+    TEXT[implementation]: The DynamoDB store seals with the attribute `sealed` on the counter item
+    TEXT[implementation]: of each resource.
+    TEXT[!MUST,implementation]: A write MUST fail when the counter item of its resource has the
+    TEXT[!MUST,implementation]: attribute `sealed`.
+    TEXT[!MUST,implementation,test]: To seal a resource that has no counter item, the tool MUST create the
+    TEXT[!MUST,implementation,test]: counter item with the attribute `sealed`.
+    TEXT[!MUST,implementation,test]: A write that fails because the store is sealed MUST return
+    TEXT[!MUST,implementation,test]: `503 ServiceUnavailable`.
+    TEXT[implementation,test]: An unseal removes the attribute `sealed`.
+    TEXT[!MUST,implementation]: The tool MUST NOT unseal a source when the destination holds an object
+    TEXT[!MUST,implementation]: that is not in the source, or that differs from its source object except
+    TEXT[!MUST,implementation]: in resource version.
+    TEXT[test]: A destination that holds part of a copy, or nothing, does not stop an
+    TEXT[test]: unseal.
+
+  SECTION: [12.2. Copy](#12-2-copy)
+    TEXT[!MUST,implementation]: The tool MUST seal the source before it reads it.
+    TEXT[!MUST,implementation,test]: The tool MUST NOT copy into a store that holds a `Device` or a `Member`.
+    TEXT[!MUST,implementation]: The tool MUST copy at the storage level, not through the API server.
+    TEXT[!MUST,implementation,test]: The copy MUST keep the name, UID, labels, annotations, spec, status, and
+    TEXT[!MUST,implementation,test]: creation time of each object.
+    TEXT[!MUST,implementation]: The copy MUST NOT keep the resource version.
+    TEXT[!MUST,implementation,test]: After the copy, the tool MUST verify that each object in the destination
+    TEXT[!MUST,implementation,test]: equals its source, except for the resource version.
+
+  SECTION: [12.3. A store that cannot be sealed](#12-3-a-store-that-cannot-be-sealed)
+    TEXT[!MUST]: Before a move from such a store, the operator MUST stop solas in every
+    TEXT[!MUST]: member cluster.
+    TEXT[!MUST,implementation]: The tool MUST then list the `Member` objects, wait `D` by its own clock,
+    TEXT[!MUST,implementation]: and list them again.
+    TEXT[!MUST,implementation,test]: The tool MUST NOT copy when a `Member` renewed in that time, or when a
+    TEXT[!MUST,implementation,test]: `Device` or a `Member` changed.
+
+  SECTION: [12.4. Switch](#12-4-switch)
+    TEXT[!SHOULD]: Each member cluster SHOULD switch to the destination within `D` of the
+    TEXT[!SHOULD]: seal.
+    TEXT[test]: On the destination, the member renews its `Member`, which has the same
+    TEXT[test]: UID, spec 7.2, and its claims go back to `Bound`.

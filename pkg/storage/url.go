@@ -144,19 +144,21 @@ func onlyKeys(raw string, values url.Values, allowed ...string) error {
 func (c Config) String() string {
 	switch c.Kind {
 	case DynamoDB:
-		q := url.Values{}
+		// The URL reads as people write it: the endpoint is not escaped
+		// unless it has a character that the query would split on.
+		var q []string
+		if c.CreateTable {
+			q = append(q, "create-table=true")
+		}
 		if c.Region != "" {
-			q.Set("region", c.Region)
+			q = append(q, "region="+queryValue(c.Region))
 		}
 		if c.Endpoint != "" {
-			q.Set("endpoint", c.Endpoint)
-		}
-		if c.CreateTable {
-			q.Set("create-table", "true")
+			q = append(q, "endpoint="+queryValue(c.Endpoint))
 		}
 		s := "dynamodb://" + c.Table
 		if len(q) > 0 {
-			s += "?" + q.Encode()
+			s += "?" + strings.Join(q, "&")
 		}
 		return s
 	case Etcd:
@@ -167,4 +169,13 @@ func (c Config) String() string {
 		return "etcd://" + strings.Join(hosts, ",")
 	}
 	return ""
+}
+
+// queryValue escapes a query value only when it holds &, #, +, %, or a
+// space, which the query would read in another way.
+func queryValue(v string) string {
+	if strings.ContainsAny(v, "&#+% ") {
+		return url.QueryEscape(v)
+	}
+	return v
 }

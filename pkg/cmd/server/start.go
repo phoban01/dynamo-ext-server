@@ -7,9 +7,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/spf13/cobra"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/endpoints/openapi"
@@ -157,7 +154,7 @@ func (o *Options) restOptionsGetter(ctx context.Context) (apiserver.RESTOptionsG
 		getter.EtcdServers = sc.Endpoints
 		return getter, nil
 	}
-	client, err := DynamoClient(ctx, sc)
+	client, err := storageurl.DynamoClient(ctx, sc)
 	if err != nil {
 		return getter, err
 	}
@@ -176,31 +173,6 @@ func (o *Options) restOptionsGetter(ctx context.Context) (apiserver.RESTOptionsG
 		PollInterval:   o.PollInterval,
 	}
 	return getter, nil
-}
-
-// defaultRegion is the AWS region when neither the storage URL nor the
-// environment names one.
-const defaultRegion = "us-east-1"
-
-// DynamoClient returns a DynamoDB client for a DynamoDB storage URL. The
-// credentials come from the AWS environment.
-func DynamoClient(ctx context.Context, sc storageurl.Config) (*dynamodb.Client, error) {
-	var opts []func(*awsconfig.LoadOptions) error
-	if sc.Region != "" {
-		opts = append(opts, awsconfig.WithRegion(sc.Region))
-	}
-	cfg, err := awsconfig.LoadDefaultConfig(ctx, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("load AWS configuration: %w", err)
-	}
-	if cfg.Region == "" {
-		cfg.Region = defaultRegion
-	}
-	return dynamodb.NewFromConfig(cfg, func(opts *dynamodb.Options) {
-		if sc.Endpoint != "" {
-			opts.BaseEndpoint = aws.String(sc.Endpoint)
-		}
-	}), nil
 }
 
 // Run starts the server and blocks until ctx ends.

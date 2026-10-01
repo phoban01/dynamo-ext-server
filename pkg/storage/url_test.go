@@ -72,3 +72,14 @@ func TestParseURL(t *testing.T) {
 		}
 	}
 }
+
+func TestURLString(t *testing.T) {
+	c := Config{Kind: DynamoDB, Table: "solas", Endpoint: "http://172.18.0.2:8000", CreateTable: true}
+	if got, want := c.String(), "dynamodb://solas?create-table=true&endpoint=http://172.18.0.2:8000"; got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+	odd := Config{Kind: DynamoDB, Table: "solas", Endpoint: "http://h:8000/a&b"}
+	if back, err := Parse(odd.String()); err != nil || back.Endpoint != odd.Endpoint {
+		t.Errorf("Parse(%q) = %+v, %v; want the endpoint back", odd.String(), back, err)
+	}
+}

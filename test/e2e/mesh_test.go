@@ -260,7 +260,82 @@ func TestMesh(t *testing.T) {
 			waitPhase(t, clients[winner], "job", claimsv1alpha1.ClaimLost, 60*time.Second)
 			return ctx
 		}).
+		Assess("the mesh moves to the other store with one setting", moveStore(clients)).
 		Feature()
 
 	testenv.Test(t, f)
+}
+
+// holders returns member/claim/token of every device, by name.
+func holders(ctx context.Context, t *testing.T, c client.Client) map[string]string {
+	t.Helper()
+	var list solasv1alpha1.DeviceList
+	if err := c.List(ctx, &list); err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]string{}
+	for _, d := range list.Items {
+		h := ""
+		if r := d.Status.ClaimRef; r != nil {
+			h = r.Member + "/" + r.Name
+		}
+		out[d.Name] = fmt.Sprintf("%s/%d", h, d.Status.FencingToken)
+	}
+	return out
+}
+
+// moveStore moves the mesh to the other store with switch-store.sh, spec
+// section 12. Holders, fencing tokens, and member UIDs stay the same, and
+// a new claim binds on the new store.
+func moveStore(clients map[string]client.Client) features.Func {
+	return func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+		other := "etcd"
+		if os.Getenv("SOLAS_STORE") == "etcd" {
+			other = "dynamodb"
+		}
+		before := holders(ctx, t, clients["a"])
+		uids := map[string]string{"a": memberUID(ctx, clients["a"], "a"), "b": memberUID(ctx, clients["b"], "b")}
+
+		run(t, "", root+"/demo/k3d/switch-store.sh", other)
+
+		eventually(t, 60*time.Second, "no claim Suspended", func(ctx context.Context) bool {
+			for _, c := range clients {
+				var list claimsv1alpha1.DeviceClaimList
+				if err := c.List(ctx, &list); err != nil {
+					return false
+				}
+				for _, cl := range list.Items {
+					if cl.Status.Phase == claimsv1alpha1.ClaimSuspended {
+						return false
+					}
+				}
+			}
+			return true
+		})
+		after := holders(ctx, t, clients["b"])
+		if fmt.Sprint(after) != fmt.Sprint(before) {
+			t.Fatalf("holders and tokens changed in the move:\nbefore %v\nafter  %v", before, after)
+		}
+		for name, uid := range uids {
+			if got := memberUID(ctx, clients[name], name); got != uid {
+				t.Errorf("member %s uid = %s after the move, want %s", name, got, uid)
+			}
+		}
+
+		claim := `apiVersion: claims.solas.dev/v1alpha1
+kind: DeviceClaim
+metadata:
+  name: after-move
+  namespace: work
+spec:
+  selector:
+    cel: device.spec.attributes.speed == '100G'
+`
+		run(t, claim, "kubectl", "--kubeconfig", kubeconfig("a"), "apply", "-f", "-")
+		waitPhase(t, clients["a"], "after-move", claimsv1alpha1.ClaimBound, 60*time.Second)
+		if h := holder(ctx, clients["b"], "nic-2"); h != "a/after-move/1" {
+			t.Errorf("nic-2 holder = %s, want a/after-move/1", h)
+		}
+		return ctx
+	}
 }
