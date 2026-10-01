@@ -462,3 +462,38 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation,test]: list, as it does for a `claimRef`, spec 8.3.
     TEXT[!MUST,implementation]: The controller MUST clear a request that names its own member and a claim
     TEXT[!MUST,implementation]: that does not exist, as it does for a `claimRef`, spec 6.4.
+
+  SECTION: [12.1. Seal](#12-1-seal)
+    TEXT[!MUST]: A sealed store MUST reject every write.
+    TEXT[!MUST]: A sealed store MUST serve reads.
+    TEXT[!MUST]: A seal MUST NOT change any object.
+    TEXT[!MUST]: A write MUST fail when the counter item of its resource has the
+    TEXT[!MUST]: attribute `sealed`.
+    TEXT[!MUST]: To seal a resource that has no counter item, the tool MUST create the
+    TEXT[!MUST]: counter item with the attribute `sealed`.
+    TEXT[!MUST]: A write that fails because the store is sealed MUST return
+    TEXT[!MUST]: `503 ServiceUnavailable`.
+    TEXT[!MUST]: The tool MUST NOT unseal a source when the destination differs from it,
+    TEXT[!MUST]: except in resource versions.
+
+  SECTION: [12.2. Copy](#12-2-copy)
+    TEXT[!MUST]: The tool MUST seal the source before it reads it.
+    TEXT[!MUST]: The tool MUST NOT copy into a store that holds a `Device` or a `Member`.
+    TEXT[!MUST]: The tool MUST copy at the storage level, not through the API server.
+    TEXT[!MUST]: The copy MUST keep the name, UID, labels, annotations, spec, status, and
+    TEXT[!MUST]: creation time of each object.
+    TEXT[!MUST]: The copy MUST NOT keep the resource version.
+    TEXT[!MUST]: After the copy, the tool MUST verify that each object in the destination
+    TEXT[!MUST]: equals its source, except for the resource version.
+
+  SECTION: [12.3. A store that cannot be sealed](#12-3-a-store-that-cannot-be-sealed)
+    TEXT[!MUST]: Before a move from such a store, the operator MUST stop solas in every
+    TEXT[!MUST]: member cluster.
+    TEXT[!MUST]: The tool MUST then list the `Member` objects, wait `D` by its own clock,
+    TEXT[!MUST]: and list them again.
+    TEXT[!MUST]: The tool MUST NOT copy when a `Member` renewed in that time, or when a
+    TEXT[!MUST]: `Device` or a `Member` changed.
+
+  SECTION: [12.4. Switch](#12-4-switch)
+    TEXT[!SHOULD]: Each member cluster SHOULD switch to the destination within `D` of the
+    TEXT[!SHOULD]: seal.
