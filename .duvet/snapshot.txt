@@ -476,11 +476,14 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation,test]: A write that fails because the store is sealed MUST return
     TEXT[!MUST,implementation,test]: `503 ServiceUnavailable`.
     TEXT[implementation,test]: An unseal removes the attribute `sealed`.
-    TEXT[!MUST]: The tool MUST NOT unseal a source when the destination differs from it,
-    TEXT[!MUST]: except in resource versions.
+    TEXT[!MUST,implementation]: The tool MUST NOT unseal a source when the destination holds an object
+    TEXT[!MUST,implementation]: that is not in the source, or that differs from its source object except
+    TEXT[!MUST,implementation]: in resource version.
+    TEXT[test]: A destination that holds part of a copy, or nothing, does not stop an
+    TEXT[test]: unseal.
 
   SECTION: [12.2. Copy](#12-2-copy)
-    TEXT[!MUST]: The tool MUST seal the source before it reads it.
+    TEXT[!MUST,implementation]: The tool MUST seal the source before it reads it.
     TEXT[!MUST,implementation,test]: The tool MUST NOT copy into a store that holds a `Device` or a `Member`.
     TEXT[!MUST,implementation]: The tool MUST copy at the storage level, not through the API server.
     TEXT[!MUST,implementation,test]: The copy MUST keep the name, UID, labels, annotations, spec, status, and

@@ -781,9 +781,12 @@ A write that fails because the store is sealed MUST return
 `503 ServiceUnavailable`.
 
 An unseal removes the attribute `sealed`.
-The tool MUST NOT unseal a source when the destination differs from it,
-except in resource versions.
-A difference shows that a cluster wrote to the destination.
+The tool MUST NOT unseal a source when the destination holds an object
+that is not in the source, or that differs from its source object except
+in resource version.
+Such an object shows that a cluster wrote to the destination.
+A destination that holds part of a copy, or nothing, does not stop an
+unseal.
 
 ### 12.2. Copy
 

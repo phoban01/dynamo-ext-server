@@ -68,3 +68,35 @@ func byName(ctx context.Context, s *Store, r resource) (map[string]runtime.Objec
 	}
 	return out, nil
 }
+
+//= spec/solas.md#12-1-seal
+//# The tool MUST NOT unseal a source when the destination holds an object
+//# that is not in the source, or that differs from its source object except
+//# in resource version.
+
+// Untouched returns an error when dst holds an object that is not an exact
+// copy of a source object, except for the resource version. Such an object
+// shows that a cluster wrote to dst. A partial copy passes.
+func Untouched(ctx context.Context, src, dst *Store) error {
+	var problems []string
+	for _, r := range resources {
+		want, err := byName(ctx, src, r)
+		if err != nil {
+			return err
+		}
+		got, err := byName(ctx, dst, r)
+		if err != nil {
+			return err
+		}
+		for name, g := range got {
+			w, ok := want[name]
+			if !ok || !equality.Semantic.DeepEqual(w, g) {
+				problems = append(problems, r.gr.Resource+"/"+name)
+			}
+		}
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("a cluster wrote to the destination: %s", strings.Join(problems, ", "))
+	}
+	return nil
+}
