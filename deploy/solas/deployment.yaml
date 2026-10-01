@@ -1,6 +1,6 @@
 # One Deployment runs solas, ADR 0012. Every replica serves the API. Only
 # the replica that holds the leader election lease runs the controller
-# part. It needs the ConfigMap solas-member, the Secret solas-dynamodb
+# part. It needs the ConfigMap solas-member, the Secret solas-storage
 # (see config/), and the Secret solas-tls from hack/gen-certs.sh.
 apiVersion: apps/v1
 kind: Deployment
@@ -26,23 +26,25 @@ spec:
             - --secure-port=8443
             - --tls-cert-file=/certs/tls.crt
             - --tls-private-key-file=/certs/tls.key
-            - --storage-url=dynamodb://solas?create-table=true&endpoint=$(DYNAMODB_ENDPOINT)
+            - --storage-url=$(STORAGE_URL)
             - --cluster-id=$(CLUSTER_ID)
             - --lease-duration=$(LEASE_DURATION)
             - --lease-margin=$(LEASE_MARGIN)
             - --sweep-interval=$(SWEEP_INTERVAL)
           env:
-            # The endpoint and credentials come from this Secret, so each
-            # member cluster can point at the shared table.
-            - name: DYNAMODB_ENDPOINT
+            # The store and its credentials come from this Secret, so each
+            # member cluster can point at the shared store. The AWS keys are
+            # optional: an etcd store needs none, and on AWS a role can
+            # give them.
+            - name: STORAGE_URL
               valueFrom:
-                secretKeyRef: {name: solas-dynamodb, key: endpoint}
+                secretKeyRef: {name: solas-storage, key: url}
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
-                secretKeyRef: {name: solas-dynamodb, key: accessKeyID}
+                secretKeyRef: {name: solas-storage, key: accessKeyID, optional: true}
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
-                secretKeyRef: {name: solas-dynamodb, key: secretAccessKey}
+                secretKeyRef: {name: solas-storage, key: secretAccessKey, optional: true}
             # Each member cluster sets its own ID in this ConfigMap.
             - name: CLUSTER_ID
               valueFrom:

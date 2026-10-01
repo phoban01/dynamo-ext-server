@@ -25,9 +25,10 @@ export KUBECONFIG="$root/$kube"
 say "load images"
 image_import "$cluster" solas:dev solas-demo:dev
 
-say "install solas as member $name, table $endpoint"
+url="dynamodb://solas?create-table=true&endpoint=$endpoint"
+say "install solas as member $name, store $url"
 # A short lease, so the demo scenes take seconds.
-solas_install "$name" "$endpoint" 10s 1s 3s
+solas_install "$name" "$url" 10s 1s 3s
 for _ in $(seq 60); do
   kubectl get member "$name" >/dev/null 2>&1 && break
   sleep 1

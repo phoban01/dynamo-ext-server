@@ -51,7 +51,7 @@ step "deploy dynamodb-local and solas as member smoke"
 kubectl apply -f deploy/solas/namespace.yaml >/dev/null
 kubectl apply -f deploy/dynamodb-local/ >/dev/null
 kubectl -n solas-system rollout status deploy/dynamodb-local --timeout=180s >/dev/null
-solas_install smoke http://dynamodb-local.solas-system.svc:8000
+solas_install smoke "dynamodb://solas?create-table=true&endpoint=http://dynamodb-local.solas-system.svc:8000"
 
 step "create and list a device"
 kubectl apply -f - >/dev/null <<YAML

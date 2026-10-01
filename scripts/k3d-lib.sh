@@ -86,15 +86,15 @@ image_import() {
   return 1
 }
 
-# solas_install <cluster-id> <table endpoint> [lease] [margin] [sweep]
+# solas_install <cluster-id> <storage url> [lease] [margin] [sweep]
 # installs solas from deploy/solas into the cluster that KUBECONFIG names,
 # and waits until the cluster serves the solas API. The ConfigMap and the
 # Secret come first, because the Pod reads them at start.
 solas_install() {
-  local id=$1 endpoint=$2 lease=${3:-30s} margin=${4:-3s} sweep=${5:-10s}
+  local id=$1 url=$2 lease=${3:-30s} margin=${4:-3s} sweep=${5:-10s}
   kubectl apply -f deploy/solas/namespace.yaml >/dev/null
-  kubectl -n solas-system create secret generic solas-dynamodb --dry-run=client -o yaml \
-    --from-literal=endpoint="$endpoint" \
+  kubectl -n solas-system create secret generic solas-storage --dry-run=client -o yaml \
+    --from-literal=url="$url" \
     --from-literal=accessKeyID=local --from-literal=secretAccessKey=local | kubectl apply -f - >/dev/null
   kubectl -n solas-system create configmap solas-member --dry-run=client -o yaml \
     --from-literal=clusterID="$id" --from-literal=leaseDuration="$lease" \

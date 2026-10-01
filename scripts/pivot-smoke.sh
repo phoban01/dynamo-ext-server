@@ -45,7 +45,7 @@ image_import "$cluster" solas:dev solas-pivot:dev
 kubectl apply -f deploy/solas/namespace.yaml >/dev/null
 kubectl apply -f deploy/dynamodb-local/ >/dev/null
 kubectl -n solas-system rollout status deploy/dynamodb-local --timeout=180s >/dev/null
-solas_install pivot http://dynamodb-local.solas-system.svc:8000
+solas_install pivot "dynamodb://solas?create-table=true&endpoint=http://dynamodb-local.solas-system.svc:8000"
 
 step "the old CRD holds two devices in etcd"
 kubectl apply -f deploy/pivot/example/crd.yaml >/dev/null
