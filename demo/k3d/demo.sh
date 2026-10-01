@@ -169,6 +169,58 @@ wait_for 60 "$winner/job Lost" is_phase "$winner" job Lost
 show "$winner" get deviceclaims -n work
 show a get devices
 
+case $store in
+dynamodb) other=etcd ;;
+etcd) other=dynamodb ;;
+esac
+scene "7. Move the mesh from $store to $other: one setting"
+# holders prints name=member/claim/token for every device.
+holders() { k a get devices -o jsonpath='{range .items[*]}{.metadata.name}={.status.claimRef.member}/{.status.claimRef.name}/{.status.fencingToken} {end}'; }
+before=$(holders)
+if [ "$store" = dynamodb ]; then
+  say "copy: solas migrate seals $store, copies every Device and Member to $other, and verifies the copy"
+else
+  say "copy: solas stops, solas migrate checks that $store is quiet, copies every Device and Member to $other, and verifies the copy"
+fi
+demo/k3d/switch-store.sh copy "$other" 2>&1 | grep -v '^copy ' | sed 's/^/  /' || fail "solas migrate"
+if [ "$store" = dynamodb ]; then
+  if k a label device nic-2 moved=yes >"${TMPDIR:-/tmp}/solas-demo-write.log" 2>&1; then
+    fail "a write to the sealed store passed"
+  fi
+  say "a write through cluster a now fails: $(tail -1 "${TMPDIR:-/tmp}/solas-demo-write.log")"
+fi
+url() { k "$1" -n solas-system get secret solas-storage -o jsonpath='{.data.url}' | base64 -d; }
+say "the one setting, before: url=$(url a)"
+say "point: set url in the Secret solas-storage of each cluster, and restart solas"
+demo/k3d/switch-store.sh point "$other" | sed 's/^/  /'
+say "the one setting, after:  url=$(url a)"
+# The members renew on the new store within D, so no claim stays
+# Suspended, and every holder and token is the same.
+none_suspended() {
+  local name phases
+  for name in a b; do
+    phases=$(k "$name" get deviceclaims -A -o jsonpath='{.items[*].status.phase}') || return 1
+    case $phases in *Suspended*) return 1 ;; esac
+  done
+}
+wait_for 60 "no claim Suspended on $other" none_suspended
+[ "$(holders)" = "$before" ] || fail "holders or tokens changed in the move: before $before, after $(holders)"
+say "every holder and every fencing token is the same on $other"
+k a apply -f - >/dev/null <<YAML
+apiVersion: claims.solas.dev/v1alpha1
+kind: DeviceClaim
+metadata:
+  name: after-move
+  namespace: work
+spec:
+  selector:
+    cel: device.spec.attributes.speed == '100G'
+YAML
+wait_for 60 "a/after-move Bound on $other" is_phase a after-move Bound
+show a get deviceclaims -n work after-move
+show b get devices
+say "a new claim binds nic-2 on $other"
+
 scene "Device log of gpu-h100-1"
 device_log | tr '}' '\n' | grep -o '"claim":"[^"]*","token":[0-9]*,"accepted":[a-z]*' | uniq -c | sed 's/^/  /'
 
