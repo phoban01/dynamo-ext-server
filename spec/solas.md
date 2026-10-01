@@ -5,15 +5,18 @@
 ### 1.1. Scope
 
 This document specifies solas. Solas is a Kubernetes extension API
-server that stores global resources in DynamoDB. Several member clusters
-share one table and so share one view of the global resources. The
-document also specifies the controller that binds devices to claims.
+server that stores global resources in a shared store: a DynamoDB table
+or an etcd cluster. Several member clusters share one store and so
+share one view of the global resources. The document also specifies the
+controller that binds devices to claims.
 
 ### 1.2. Terms
 
 - **Member cluster**: a Kubernetes cluster that runs the solas API server
   and the solas controller.
-- **Table**: the one DynamoDB table that all member clusters share.
+- **Store**: the one DynamoDB table or etcd cluster that all member
+  clusters share.
+- **Table**: the store, when it is a DynamoDB table.
 - **Resource**: a group and resource name, for example
   `solas.dev/devices`.
 - **Write**: a create, update, or delete of one object.
@@ -32,6 +35,10 @@ Each normative sentence holds one requirement. Code cites the sentence
 with a Duvet annotation.
 
 ## 2. Storage
+
+Sections 2.1 to 2.4, 3, and 4 describe the DynamoDB store. Section 2.7
+describes the etcd store. Section 2.5 holds the rules that every store
+keeps.
 
 ### 2.1. Table
 
@@ -135,6 +142,58 @@ So the list is a consistent snapshot at that version.
 The store keeps only the latest state of each object.
 A request for a list at an older, exact resource version MUST be served
 by the watch cache, or it MUST fail with `410 Gone`.
+
+### 2.5. Store contract
+
+Sections 5 to 10 depend only on the rules of this section.
+Every store MUST keep them.
+
+A conditional write MUST apply only when the object still has the
+resource version that the writer read.
+A write MUST apply in full or not at all.
+A create MUST fail when an object with the same key exists.
+A read MUST see every write that completed before the read started.
+A list MUST be a consistent snapshot at the resource version that it
+returns.
+The resource version of each write to a resource MUST be greater than the
+resource version of every earlier write to that resource.
+A watch from a resource version MUST deliver every later change of the
+resource, in order, or it MUST fail with `410 Gone`.
+
+### 2.6. Storage URL
+
+The store MUST be a setting of the API server, in the form of one
+storage URL.
+A URL with the scheme `dynamodb` MUST select the DynamoDB store.
+The host part of a `dynamodb` URL is the table name.
+An empty table name selects the default table name.
+The query key `region` sets the AWS region of the table.
+The query key `endpoint` sets the URL of the DynamoDB endpoint.
+The query key `create-table` with the value `true` makes the server
+create the table at start when it does not exist.
+A URL with the scheme `etcd` MUST select the etcd store.
+The host part of an `etcd` URL is a list of `host:port` endpoints,
+separated by commas.
+The server MUST reject a storage URL with another scheme.
+The server MUST reject a storage URL with a query key that this section
+does not name for its scheme.
+All member clusters MUST use the same store.
+The URLs of two member clusters can differ only in the address by which
+each cluster reaches the store.
+
+### 2.7. etcd store
+
+The etcd store MUST use the etcd3 storage of `k8s.io/apiserver`.
+The etcd store MUST keep each object under the storage prefix of the API
+server.
+Every read of the etcd store MUST be a linearizable read.
+
+etcd gives each write one revision, in one order for the whole cluster.
+The etcd store uses that revision as the resource version.
+A conditional write is an etcd transaction that compares the revision of
+the key.
+A watch from a revision that etcd has compacted fails with `410 Gone`.
+So the etcd store keeps the rules of section 2.5.
 
 ## 3. Resource versions
 
