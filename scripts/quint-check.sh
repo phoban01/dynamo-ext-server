@@ -67,6 +67,10 @@ pass "negative no-token-check" quint test quint/negative/no-token-check.qnt \
 pass "negative force-clear" quint test quint/negative/force-clear.qnt \
   --main force_clear
 
+# The test passes when a copy with no seal breaks noDoubleBind.
+pass "negative no-seal" quint test quint/negative/no-seal.qnt --main no_seal \
+  --match doubleBindTest
+
 pass "run solas2 safety" run quint/solas.qnt --main solas2 --invariant safety
 # Fencing does not depend on the lease margin: it holds even when M = 0.
 pass "run no-margin fencing" run quint/negative/no-margin.qnt --invariant fencing
@@ -83,6 +87,8 @@ for w in witnessDelivered witnessGone witnessListed; do
   violate "witness store3 $w" run quint/store.qnt --main store3 --invariant "$w"
 done
 
+violate "negative no-seal run" \
+  run quint/negative/no-seal.qnt --invariant noDoubleBind
 violate "negative list-no-recheck" \
   run quint/negative/list-no-recheck.qnt --invariant listSnapshot
 violate "negative watch-no-gap-check" \
