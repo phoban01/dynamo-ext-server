@@ -20,8 +20,6 @@ spec:
       additionalPrinterColumns:
         - {name: Phase, type: string, jsonPath: .status.phase}
         - {name: Device, type: string, jsonPath: .status.deviceName}
-        - {name: Priority, type: integer, jsonPath: .spec.priority}
-        - {name: Token, type: integer, jsonPath: .status.fencingToken}
         - {name: Expires, type: string, jsonPath: .status.leaseExpiresAt}
         - {name: Age, type: date, jsonPath: .metadata.creationTimestamp}
       schema:

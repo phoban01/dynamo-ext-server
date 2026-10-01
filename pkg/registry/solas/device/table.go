@@ -3,7 +3,6 @@ package device
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,17 +13,20 @@ import (
 )
 
 // tableConvertor prints the columns of kubectl get devices, spec 10.2.
+// Columns with Priority 1 show only with -o wide.
 type tableConvertor struct{}
+
+// none is what kubectl prints for a value that is not set.
+const none = "<none>"
 
 var columns = []metav1.TableColumnDefinition{
 	{Name: "Name", Type: "string", Format: "name"},
-	{Name: "Holder", Type: "string", Description: "member/namespace/claim"},
-	{Name: "Priority", Type: "integer"},
-	{Name: "Token", Type: "integer", Description: "fencing token of the last bind"},
-	{Name: "Preemptible", Type: "boolean"},
-	{Name: "Preemption", Type: "string", Description: "the claim that asks, and its priority"},
-	{Name: "Ready", Type: "string"},
+	{Name: "Ready", Type: "string", Description: "status of the Ready condition"},
+	{Name: "Member", Type: "string", Description: "member cluster of the claim that holds the device"},
+	{Name: "Claim", Type: "string", Description: "namespace/name of the claim that holds the device"},
 	{Name: "Age", Type: "string"},
+	{Name: "Preemptible", Type: "boolean", Priority: 1},
+	{Name: "Preemption", Type: "string", Priority: 1, Description: "member/namespace/name of the claim that asks for the device"},
 }
 
 func (tableConvertor) ConvertToTable(_ context.Context, obj runtime.Object, _ runtime.Object) (*metav1.Table, error) {
@@ -41,22 +43,21 @@ func (tableConvertor) ConvertToTable(_ context.Context, obj runtime.Object, _ ru
 	}
 	for i := range devices {
 		d := &devices[i]
-		holder, prio := "<free>", ""
+		member, claim := none, none
 		if r := d.Status.ClaimRef; r != nil {
-			holder = r.Member + "/" + r.Namespace + "/" + r.Name
-			prio = strconv.Itoa(int(r.Priority))
+			member, claim = r.Member, r.Namespace+"/"+r.Name
 		}
-		preemption := ""
+		preemption := none
 		if p := d.Status.Preemption; p != nil {
-			preemption = fmt.Sprintf("%s/%s/%s@%d", p.Claim.Member, p.Claim.Namespace, p.Claim.Name, p.Claim.Priority)
+			preemption = p.Claim.Member + "/" + p.Claim.Namespace + "/" + p.Claim.Name
 		}
 		ready := "Unknown"
 		if c := meta.FindStatusCondition(d.Status.Conditions, "Ready"); c != nil {
 			ready = string(c.Status)
 		}
 		table.Rows = append(table.Rows, metav1.TableRow{
-			Cells: []any{d.Name, holder, prio, d.Status.FencingToken, d.Spec.Preemptible, preemption, ready,
-				duration.HumanDuration(metav1.Now().Sub(d.CreationTimestamp.Time))},
+			Cells: []any{d.Name, ready, member, claim,
+				duration.HumanDuration(metav1.Now().Sub(d.CreationTimestamp.Time)), d.Spec.Preemptible, preemption},
 			Object: runtime.RawExtension{Object: d},
 		})
 	}
