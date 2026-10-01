@@ -51,6 +51,44 @@
         }
       }
     },
+    "etcd@3.6.14": {
+      "last_modified": "2026-08-27T07:16:00Z",
+      "resolved": "github:NixOS/nixpkgs/c27cdad491a991b11ed731760aa2ef8db0cb0410#etcd",
+      "source": "devbox-search",
+      "version": "3.6.14",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/r3x7i32z5kdcgkyq1m220sa6fi4lbsy4-etcd-3.6.14",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/r3x7i32z5kdcgkyq1m220sa6fi4lbsy4-etcd-3.6.14"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/q2crky6fqa1slldvg1pbgx8iwbbfzvbn-etcd-3.6.14",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/q2crky6fqa1slldvg1pbgx8iwbbfzvbn-etcd-3.6.14"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/4bc3drz6s8yi8c4c2g8aag5gkh2js6xg-etcd-3.6.14",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/4bc3drz6s8yi8c4c2g8aag5gkh2js6xg-etcd-3.6.14"
+        }
+      }
+    },
     "github:NixOS/nixpkgs/nixpkgs-unstable": {
       "last_modified": "2026-09-18T09:35:58Z",
       "resolved": "github:NixOS/nixpkgs/0a3468a402c449992505b6a9fc5b06580141b750?lastModified=1789724158&narHash=sha256-nlKgrm0dsVhOSopKheVBCcOpiIticufPPVLdVOI0euA%3D"

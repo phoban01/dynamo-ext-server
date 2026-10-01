@@ -1,6 +1,8 @@
 // Model of the solas protocol: members, devices, claims, and the sweeper.
-// spec/solas.md sections 5 to 8 give the rules. The store is a
-// linearizable map with conditional writes, as sections 2 and 3 give.
+// spec/solas.md sections 5 to 10 give the rules. The store is a
+// linearizable map with conditional writes. The model assumes only the
+// store contract of spec 2.5, so it holds for every store that keeps the
+// contract. docs/store-contract.md shows how each store keeps it.
 module solas {
   // A claimRef, spec 5.2. The claim ID stands for the claim UID.
   // prio is the priority of the claim, spec 10.2.

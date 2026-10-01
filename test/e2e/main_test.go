@@ -35,6 +35,15 @@ func mustAbs(p string) string {
 }
 
 func TestMain(m *testing.M) {
+	// SOLAS_STORE picks the shared store, dynamodb or etcd. join.sh reads
+	// it, so both clusters use the same store.
+	switch s := os.Getenv("SOLAS_STORE"); s {
+	case "", "dynamodb", "etcd":
+		fmt.Printf("e2e: store %s\n", map[bool]string{true: "dynamodb", false: s}[s == ""])
+	default:
+		fmt.Fprintf(os.Stderr, "e2e: SOLAS_STORE=%q is not dynamodb or etcd\n", s)
+		os.Exit(2)
+	}
 	testenv = env.New()
 	testenv.Setup(
 		script("scripts/images.sh"),

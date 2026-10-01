@@ -15,7 +15,8 @@
     "openssl": {
       "version": "latest",
       "outputs": ["out", "dev"]
-    }
+    },
+    "etcd": "3.6.14"
   },
   "env": {
     "JVM_ARGS": "-Xmx3g",
@@ -47,6 +48,7 @@
         "scripts/test.sh",
         "scripts/quint-check.sh",
         "scripts/mbt.sh",
+        "MBT_STORE=etcd scripts/mbt.sh",
         "rm -rf .duvet/requirements && duvet report --ci"
       ]
     }

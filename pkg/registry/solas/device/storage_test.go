@@ -15,28 +15,15 @@ import (
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	"github.com/phoban01/solas/internal/ddbtest"
+	"github.com/phoban01/solas/internal/teststore"
 	"github.com/phoban01/solas/pkg/apis/solas"
 	"github.com/phoban01/solas/pkg/apiserver"
 	"github.com/phoban01/solas/pkg/registry/solas/device"
-	"github.com/phoban01/solas/pkg/storage/dynamo"
 )
 
-func newREST(t *testing.T) (*device.REST, *device.StatusREST) {
+func newREST(t *testing.T, g apiserver.RESTOptionsGetter) (*device.REST, *device.StatusREST) {
 	t.Helper()
-	c := ddbtest.Client(t)
-	table := ddbtest.TableName(t)
-	ddbtest.DeleteTable(t, c, table)
-	if err := dynamo.EnsureTable(context.Background(), c, table); err != nil {
-		t.Fatal(err)
-	}
-	getter := apiserver.RESTOptionsGetter{
-		Dynamo:          dynamo.Config{Client: c, Table: table, PollInterval: 20 * time.Millisecond},
-		Codec:           apiserver.StorageCodec(),
-		EncodeVersioner: apiserver.StorageVersioner(),
-		Prefix:          "/registry",
-	}
-	r, status, err := device.NewREST(apiserver.Scheme, getter)
+	r, status, err := device.NewREST(apiserver.Scheme, g)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,8 +59,12 @@ func claimUID(claim string) string { return claim }
 //# The server MUST reject a delete of a bound device.
 
 func TestDeleteOfBoundDeviceIsRejected(t *testing.T) {
+	teststore.Run(t, testDeleteOfBoundDeviceIsRejected)
+}
+
+func testDeleteOfBoundDeviceIsRejected(t *testing.T, g apiserver.RESTOptionsGetter) {
 	ctx := clusterCtx()
-	r, status := newREST(t)
+	r, status := newREST(t, g)
 	bound := create(t, r, "d1")
 	create(t, r, "d2")
 	if _, err := bind(ctx, status, bound, "c1"); err != nil {
@@ -94,8 +85,12 @@ func TestDeleteOfBoundDeviceIsRejected(t *testing.T) {
 //# Each status update MUST carry the resource version that the client read.
 
 func TestStatusUpdateWithStaleVersionConflicts(t *testing.T) {
+	teststore.Run(t, testStatusUpdateWithStaleVersionConflicts)
+}
+
+func testStatusUpdateWithStaleVersionConflicts(t *testing.T, g apiserver.RESTOptionsGetter) {
 	ctx := clusterCtx()
-	r, status := newREST(t)
+	r, status := newREST(t, g)
 	d := create(t, r, "d1")
 	if _, err := bind(ctx, status, d, "c1"); err != nil {
 		t.Fatal(err)
@@ -107,12 +102,25 @@ func TestStatusUpdateWithStaleVersionConflicts(t *testing.T) {
 	}
 }
 
-func TestListAndWatch(t *testing.T) {
+func TestListAndWatch(t *testing.T) { teststore.Run(t, testListAndWatch) }
+
+func testListAndWatch(t *testing.T, g apiserver.RESTOptionsGetter) {
 	ctx := clusterCtx()
-	r, _ := newREST(t)
+	r, _ := newREST(t, g)
 	create(t, r, "d1")
 
-	obj, err := r.List(ctx, &metainternalversion.ListOptions{})
+	// The watch cache starts empty and asks clients to retry until it has
+	// loaded, as real clients do.
+	var obj runtime.Object
+	var err error
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		obj, err = r.List(ctx, &metainternalversion.ListOptions{})
+		if err == nil || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,10 +129,9 @@ func TestListAndWatch(t *testing.T) {
 		t.Fatalf("list = %d items, want 1", len(list.Items))
 	}
 
-	// The watch cache starts empty and asks clients to retry until it has
-	// loaded, as real clients do.
+	// The watch waits for the cache too.
 	var w watch.Interface
-	deadline := time.Now().Add(10 * time.Second)
+	deadline = time.Now().Add(10 * time.Second)
 	for {
 		w, err = r.Watch(ctx, &metainternalversion.ListOptions{ResourceVersion: list.ResourceVersion})
 		if err == nil || time.Now().After(deadline) {

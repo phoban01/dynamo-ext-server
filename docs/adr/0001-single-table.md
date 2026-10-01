@@ -1,6 +1,6 @@
 # ADR 0001: One DynamoDB table in one region
 
-Status: accepted
+Status: accepted, amended by ADR 0014
 
 ## Context
 
@@ -36,3 +36,8 @@ safety depends on is a strongly consistent read.
   revisit it after the demo works in one region.
 - A table per cluster with our own replication. This needs a consensus
   protocol, which is the work DynamoDB already does for us.
+
+## Amendment
+
+ADR 0014 adds a second store: one etcd cluster. The flag `--storage-url`
+picks the store. The rules of this ADR still hold for the DynamoDB store.

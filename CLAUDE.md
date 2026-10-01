@@ -84,6 +84,9 @@ Claude Code session, so heavy jobs must not overlap.
 - The API groups are `solas.dev/v1alpha1` for Device and Member, and
   `claims.solas.dev/v1alpha1` for DeviceClaim
   ([docs/adr/0006-api-group.md](docs/adr/0006-api-group.md)).
+- One flag, `--storage-url`, picks the shared store: a DynamoDB table or
+  an etcd cluster
+  ([docs/adr/0014-storage-url.md](docs/adr/0014-storage-url.md)).
 
 ## Writing
 

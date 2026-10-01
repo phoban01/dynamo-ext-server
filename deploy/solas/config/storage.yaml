@@ -1,0 +1,17 @@
+# The shared store, spec 2.6. Every member cluster points at the same
+# store. Create this Secret before the Deployment. To move the cluster to
+# another store, change url and restart deploy/solas.
+#
+# These values are for amazon/dynamodb-local. On AWS, set the region in
+# the URL and drop the endpoint. For etcd, set url to
+# etcd://<host:port>[,<host:port>...]; the AWS keys are then not used.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: solas-storage
+  namespace: solas-system
+stringData:
+  url: dynamodb://solas?create-table=true&endpoint=http://dynamodb-local.solas-system.svc:8000
+  # url: etcd://etcd.solas-system.svc:2379
+  accessKeyID: local
+  secretAccessKey: local

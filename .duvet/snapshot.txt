@@ -68,6 +68,39 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation,test]: A request for a list at an older, exact resource version MUST be served
     TEXT[!MUST,implementation,test]: by the watch cache, or it MUST fail with `410 Gone`.
 
+  SECTION: [2.5. Store contract](#2-5-store-contract)
+    TEXT[!MUST]: Every store MUST keep them.
+    TEXT[!MUST]: A conditional write MUST apply only when the object still has the
+    TEXT[!MUST]: resource version that the writer read.
+    TEXT[!MUST]: A write MUST apply in full or not at all.
+    TEXT[!MUST]: A create MUST fail when an object with the same key exists.
+    TEXT[!MUST]: A read MUST see every write that completed before the read started.
+    TEXT[!MUST]: A list MUST be a consistent snapshot at the resource version that it
+    TEXT[!MUST]: returns.
+    TEXT[!MUST]: The resource version of each write to a resource MUST be greater than the
+    TEXT[!MUST]: resource version of every earlier write to that resource.
+    TEXT[!MUST]: A watch from a resource version MUST deliver every later change of the
+    TEXT[!MUST]: resource, in order, or it MUST fail with `410 Gone`.
+
+  SECTION: [2.6. Storage URL](#2-6-storage-url)
+    TEXT[!MUST,implementation]: The store MUST be a setting of the API server, in the form of one
+    TEXT[!MUST,implementation]: storage URL.
+    TEXT[!MUST,implementation,test]: A URL with the scheme `dynamodb` MUST select the DynamoDB store.
+    TEXT[implementation]: An empty table name selects the default table name.
+    TEXT[implementation]: The query key `create-table` with the value `true` makes the server
+    TEXT[implementation]: create the table at start when it does not exist.
+    TEXT[!MUST,implementation,test]: A URL with the scheme `etcd` MUST select the etcd store.
+    TEXT[!MUST,implementation,test]: The server MUST reject a storage URL with another scheme.
+    TEXT[!MUST,implementation,test]: The server MUST reject a storage URL with a query key that this section
+    TEXT[!MUST,implementation,test]: does not name for its scheme.
+    TEXT[!MUST,implementation]: All member clusters MUST use the same store.
+
+  SECTION: [2.7. etcd store](#2-7-etcd-store)
+    TEXT[!MUST,implementation,test]: The etcd store MUST use the etcd3 storage of `k8s.io/apiserver`.
+    TEXT[!MUST,implementation]: The etcd store MUST keep each object under the storage prefix of the API
+    TEXT[!MUST,implementation]: server.
+    TEXT[!MUST,implementation]: Every read of the etcd store MUST be a linearizable read.
+
   SECTION: [3.1. Issue](#3-1-issue)
     TEXT[!MUST,implementation]: Each resource MUST have its own counter item.
     TEXT[!MUST,implementation]: When the server first uses a resource, it MUST create the counter item
@@ -264,8 +297,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
 
   SECTION: [7.3. Renew](#7-3-renew)
     TEXT[!MUST,implementation]: A renew MUST be an update of `Member.status.renewTime`.
-    TEXT[!MUST,implementation]: The renew MUST carry the resource version that the member last read or
-    TEXT[!MUST,implementation]: wrote.
+    TEXT[!MUST,implementation,test]: The renew MUST carry the resource version that the member last read or
+    TEXT[!MUST,implementation,test]: wrote.
     TEXT[!MUST,implementation,test]: After a `404 NotFound`, the member MUST join again as section 7.2
     TEXT[!MUST,implementation,test]: describes.
     TEXT[!SHOULD,implementation]: A member SHOULD renew every `D / 3`.

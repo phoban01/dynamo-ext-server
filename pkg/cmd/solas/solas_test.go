@@ -10,7 +10,7 @@ import (
 func TestFlagsOfBothParts(t *testing.T) {
 	cmd := NewCommand(context.Background(), NewOptions())
 	for _, name := range []string{
-		"secure-port", "dynamodb-table", "dynamodb-endpoint", "storage-prefix",
+		"secure-port", "storage-url", "storage-prefix",
 		"cluster-id", "lease-duration", "lease-margin", "sweep-interval", "leader-elect",
 	} {
 		if cmd.Flags().Lookup(name) == nil {
@@ -25,5 +25,13 @@ func TestBothPartsValidate(t *testing.T) {
 	cmd.SetArgs([]string{"--cluster-id=Not_A_Name"})
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("the command ran with an invalid --cluster-id")
+	}
+}
+
+func TestBadStorageURL(t *testing.T) {
+	cmd := NewCommand(context.Background(), NewOptions())
+	cmd.SetArgs([]string{"--cluster-id=a", "--storage-url=s3://bucket"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("the command ran with a storage URL of an unknown scheme")
 	}
 }

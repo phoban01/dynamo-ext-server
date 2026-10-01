@@ -74,10 +74,12 @@ pass "run store3 storeSafety" run quint/store.qnt --main store3 --invariant stor
 for w in witnessBound witnessCleared witnessLost witnessLeft; do
   violate "witness solas2 $w" run quint/solas.qnt --main solas2 --invariant "$w"
 done
-for w in witnessDelivered witnessGone; do
+for w in witnessDelivered witnessGone witnessListed; do
   violate "witness store3 $w" run quint/store.qnt --main store3 --invariant "$w"
 done
 
+violate "negative list-no-recheck" \
+  run quint/negative/list-no-recheck.qnt --invariant listSnapshot
 violate "negative watch-no-gap-check" \
   run quint/negative/watch-no-gap-check.qnt --invariant watchComplete
 

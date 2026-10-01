@@ -1,25 +1,37 @@
 # The solas demo
 
 Two Kubernetes clusters share one pool of devices. They have no link to
-each other. Each cluster runs solas and reads and writes one DynamoDB
-table. The table is the only thing they share.
+each other. Each cluster runs solas and reads and writes one shared store:
+a DynamoDB table, or an etcd cluster. The store is the only thing they
+share.
 
 ## Run it
 
 ```sh
 devbox run demo        # build, bring up, and run every scene
-devbox run demo-down   # remove the clusters, the table, and the network
+devbox run demo-down   # remove the clusters, the stores, and the network
 ```
 
 `devbox run e2e` runs the same scenes as a Go test. `demo/k3d/demo.sh`
 and `demo/k3d/down.sh` also work on their own: outside devbox, they run
 themselves again through devbox, which has the tools they need.
 
+The demo runs on DynamoDB. To run it on etcd, set one variable:
+
+```sh
+SOLAS_STORE=etcd devbox run demo
+```
+
+`SOLAS_STORE` picks the storage URL that each cluster gets, from
+`mesh.sh url`. Nothing else changes: the clusters, the manifests, and
+the scenes are the same. `SOLAS_STORE=etcd devbox run e2e` runs the
+e2e test on etcd.
+
 The demo needs Docker and about 2 GB of free memory. It uses k3d
-(ADR 0009) and `amazon/dynamodb-local` (ADR 0007). The setup runs
-quietly and writes its log to `demo/k3d/setup.log`. It shortens the
-lease to 10 seconds, with a margin of 1 second and a sweep every 3
-seconds, so each scene takes seconds, not minutes.
+(ADR 0009), and `amazon/dynamodb-local` (ADR 0007) or etcd (ADR 0014).
+The setup runs quietly and writes its log to `demo/k3d/setup.log`. It
+shortens the lease to 10 seconds, with a margin of 1 second and a sweep
+every 3 seconds, so each scene takes seconds, not minutes.
 
 ## What it shows
 
@@ -52,8 +64,8 @@ higher token first, so it rejects the lower one.
   that uses the device with the claim's token.
 - `cmd/solas-demo`: the device gatekeeper (`device`) and the workload
   (`workload`). They are not part of solas.
-- `mesh.sh up|down|endpoint`: the Docker network `solas-mesh` and the
-  table container `solas-ddb`.
+- `mesh.sh up|down|url dynamodb|etcd`: the Docker network `solas-mesh`,
+  the table container `solas-ddb`, and the etcd container `solas-etcd`.
 - `join.sh <name>`: the k3d cluster `e2e-<name>`, with solas deployed.
   Its kubeconfig goes to `demo/k3d/.kube/<name>`.
 - `demo.sh`: the scenes above, with a check after each one.
