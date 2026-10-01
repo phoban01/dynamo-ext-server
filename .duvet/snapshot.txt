@@ -486,8 +486,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation,test]: The copy MUST keep the name, UID, labels, annotations, spec, status, and
     TEXT[!MUST,implementation,test]: creation time of each object.
     TEXT[!MUST,implementation]: The copy MUST NOT keep the resource version.
-    TEXT[!MUST]: After the copy, the tool MUST verify that each object in the destination
-    TEXT[!MUST]: equals its source, except for the resource version.
+    TEXT[!MUST,implementation,test]: After the copy, the tool MUST verify that each object in the destination
+    TEXT[!MUST,implementation,test]: equals its source, except for the resource version.
 
   SECTION: [12.3. A store that cannot be sealed](#12-3-a-store-that-cannot-be-sealed)
     TEXT[!MUST]: Before a move from such a store, the operator MUST stop solas in every
