@@ -481,11 +481,11 @@ SPECIFICATION: [Solas specification](spec/solas.md)
 
   SECTION: [12.2. Copy](#12-2-copy)
     TEXT[!MUST]: The tool MUST seal the source before it reads it.
-    TEXT[!MUST]: The tool MUST NOT copy into a store that holds a `Device` or a `Member`.
+    TEXT[!MUST,implementation,test]: The tool MUST NOT copy into a store that holds a `Device` or a `Member`.
     TEXT[!MUST,implementation]: The tool MUST copy at the storage level, not through the API server.
-    TEXT[!MUST]: The copy MUST keep the name, UID, labels, annotations, spec, status, and
-    TEXT[!MUST]: creation time of each object.
-    TEXT[!MUST]: The copy MUST NOT keep the resource version.
+    TEXT[!MUST,implementation,test]: The copy MUST keep the name, UID, labels, annotations, spec, status, and
+    TEXT[!MUST,implementation,test]: creation time of each object.
+    TEXT[!MUST,implementation]: The copy MUST NOT keep the resource version.
     TEXT[!MUST]: After the copy, the tool MUST verify that each object in the destination
     TEXT[!MUST]: equals its source, except for the resource version.
 
