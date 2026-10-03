@@ -358,14 +358,16 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[test]: live.
 
   SECTION: [8.5. Reclaim policy](#8-5-reclaim-policy)
-    TEXT[!MAY]: A `Device` MAY set a reclaim policy in `spec.reclaimPolicy`: `Delete`,
-    TEXT[!MAY]: `Delay`, or `Retain`, ADR 0016.
+    TEXT[!MAY,implementation,test]: A `Device` MAY set a reclaim policy in `spec.reclaimPolicy`: `Delete`,
+    TEXT[!MAY,implementation,test]: `Delay`, or `Retain`, ADR 0016.
+    TEXT[implementation]: The default reclaim policy is `Delete`.
     TEXT[!MUST]: Under `Delete`, the sweeper MUST clear the `claimRef` as section 8.3
     TEXT[!MUST]: describes.
     TEXT[!MUST]: Under `Delay`, the sweeper MUST NOT clear the `claimRef` until the
     TEXT[!MUST]: reclaim time `R` of the device has passed.
     TEXT[!MUST]: The sweeper MUST measure `R` on its own clock, from its first sweep that
     TEXT[!MUST]: found the holder gone.
+    TEXT[implementation]: `R` is `spec.reclaimDelaySeconds` of the device.
     TEXT[!MUST]: Under `Retain`, the sweeper MUST NOT clear the `claimRef`.
     TEXT[!MAY]: An operator MAY release a retained device.
     TEXT[!MUST]: The release MUST be a status update that clears `claimRef` and carries

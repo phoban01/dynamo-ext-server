@@ -296,6 +296,20 @@ func schema_pkg_apis_solas_v1alpha1_DeviceSpec(ref common.ReferenceCallback) com
 							Format:      "int32",
 						},
 					},
+					"reclaimPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReclaimPolicy decides when a sweeper may clear the claimRef of a member that is gone: Delete, Delay, or Retain. The default is Delete, spec 8.5.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"reclaimDelaySeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReclaimDelaySeconds is the reclaim time R of the Delay policy.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 			},
 		},

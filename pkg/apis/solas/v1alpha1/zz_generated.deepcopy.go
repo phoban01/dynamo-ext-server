@@ -108,6 +108,11 @@ func (in *DeviceSpec) DeepCopyInto(out *DeviceSpec) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.ReclaimDelaySeconds != nil {
+		in, out := &in.ReclaimDelaySeconds, &out.ReclaimDelaySeconds
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 

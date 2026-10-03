@@ -28,6 +28,11 @@ type DeviceSpec struct {
 	// PreemptionGracePeriodSeconds is how long a holder may keep the device
 	// after a preemption request. The default is 30.
 	PreemptionGracePeriodSeconds *int32
+	// ReclaimPolicy decides when a sweeper may clear the claimRef of a
+	// member that is gone, spec 8.5.
+	ReclaimPolicy ReclaimPolicy
+	// ReclaimDelaySeconds is the reclaim time R of the Delay policy.
+	ReclaimDelaySeconds *int32
 }
 
 // DeviceStatus shows which claim holds the device.
@@ -151,3 +156,13 @@ type StoreFormatList struct {
 
 	Items []StoreFormat
 }
+
+// ReclaimPolicy is the reclaim policy of a device, spec 8.5.
+type ReclaimPolicy string
+
+// The reclaim policies, ADR 0016.
+const (
+	ReclaimDelete ReclaimPolicy = "Delete"
+	ReclaimDelay  ReclaimPolicy = "Delay"
+	ReclaimRetain ReclaimPolicy = "Retain"
+)

@@ -34,6 +34,14 @@ type DeviceSpec struct {
 	// after a preemption request. The default is 30.
 	// +optional
 	PreemptionGracePeriodSeconds *int32 `json:"preemptionGracePeriodSeconds,omitempty"`
+	// ReclaimPolicy decides when a sweeper may clear the claimRef of a
+	// member that is gone: Delete, Delay, or Retain. The default is Delete,
+	// spec 8.5.
+	// +optional
+	ReclaimPolicy ReclaimPolicy `json:"reclaimPolicy,omitempty"`
+	// ReclaimDelaySeconds is the reclaim time R of the Delay policy.
+	// +optional
+	ReclaimDelaySeconds *int32 `json:"reclaimDelaySeconds,omitempty"`
 }
 
 // DeviceStatus shows which claim holds the device.
@@ -175,3 +183,13 @@ type StoreFormatList struct {
 
 	Items []StoreFormat `json:"items"`
 }
+
+// ReclaimPolicy is the reclaim policy of a device, spec 8.5.
+type ReclaimPolicy string
+
+// The reclaim policies, ADR 0016.
+const (
+	ReclaimDelete ReclaimPolicy = "Delete"
+	ReclaimDelay  ReclaimPolicy = "Delay"
+	ReclaimRetain ReclaimPolicy = "Retain"
+)
