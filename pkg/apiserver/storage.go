@@ -7,21 +7,24 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/registry/generic"
-	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/storage"
 	cacherstorage "k8s.io/apiserver/pkg/storage/cacher"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/phoban01/solas/pkg/apis/solas"
+	"github.com/phoban01/solas/pkg/registry/solas/device"
 	"github.com/phoban01/solas/pkg/storage/dynamo"
+	"github.com/phoban01/solas/pkg/storage/guard"
 )
 
 // eventsHistoryWindow is the history of the watch cache. The cacher needs
 // at least 75 seconds.
 const eventsHistoryWindow = 5 * time.Minute
 
-// RESTOptionsGetter gives each resource a store behind the watch cache:
+// RESTOptionsGetter gives each resource a store, behind its storage guard
+// and the watch cache:
 // the DynamoDB store, or the etcd store when EtcdServers is set, spec 2.6.
 type RESTOptionsGetter struct {
 	Dynamo dynamo.Config
@@ -62,8 +65,15 @@ func (g RESTOptionsGetter) GetRESTOptions(resource schema.GroupResource, _ runti
 	}, nil
 }
 
-// decorator builds the DynamoDB store and wraps it in the watch cache, as
-// generic registry StorageWithCacher does for etcd.
+// guards holds the storage guard of each resource, below the registry.
+var guards = map[schema.GroupResource]guard.Transition{
+	solas.Resource("devices"): device.Transition,
+}
+
+// decorator builds the store of a resource, wraps it in its storage guard,
+// and wraps that in the watch cache, as generic registry StorageWithCacher
+// does. The guard checks each write on the stored objects, below the
+// strategy, so servers of two releases enforce the same rules, spec 11.
 func (g RESTOptionsGetter) decorator() generic.StorageDecorator {
 	return func(
 		config *storagebackend.ConfigForResource,
@@ -74,10 +84,18 @@ func (g RESTOptionsGetter) decorator() generic.StorageDecorator {
 		getAttrsFunc storage.AttrFunc,
 		triggerFuncs storage.IndexerFuncs,
 		indexers *cache.Indexers) (storage.Interface, factory.DestroyFunc, error) {
-		s, err := dynamo.New(g.Dynamo, config.Codec, newFunc, newListFunc, config.Prefix, resourcePrefix, config.GroupResource)
+		var raw storage.Interface
+		rawDestroy := func() {}
+		var err error
+		if len(g.EtcdServers) > 0 {
+			raw, rawDestroy, err = generic.NewRawStorage(config, newFunc, newListFunc, resourcePrefix)
+		} else {
+			raw, err = dynamo.New(g.Dynamo, config.Codec, newFunc, newListFunc, config.Prefix, resourcePrefix, config.GroupResource)
+		}
 		if err != nil {
 			return nil, func() {}, err
 		}
+		s := guard.Wrap(raw, guards[config.GroupResource])
 		//= spec/solas.md#4-2-poll
 		//# The server SHOULD run one poller for each resource and share it between
 		//# watchers.
@@ -96,6 +114,7 @@ func (g RESTOptionsGetter) decorator() generic.StorageDecorator {
 			Codec:               config.Codec,
 		})
 		if err != nil {
+			rawDestroy()
 			return nil, func() {}, err
 		}
 		delegator := cacherstorage.NewCacheDelegator(cacher, s)
@@ -104,6 +123,7 @@ func (g RESTOptionsGetter) decorator() generic.StorageDecorator {
 			once.Do(func() {
 				delegator.Stop()
 				cacher.Stop()
+				rawDestroy()
 			})
 		}
 		return delegator, destroy, nil
@@ -130,7 +150,7 @@ func (g RESTOptionsGetter) etcdOptions(resource schema.GroupResource) generic.RE
 	cfg.Transport.ServerList = g.EtcdServers
 	return generic.RESTOptions{
 		StorageConfig:           cfg.ForResource(resource),
-		Decorator:               genericregistry.StorageWithCacher(),
+		Decorator:               g.decorator(),
 		EnableGarbageCollection: true,
 		DeleteCollectionWorkers: 1,
 		ResourcePrefix:          "/" + resource.Group + "/" + resource.Resource,
