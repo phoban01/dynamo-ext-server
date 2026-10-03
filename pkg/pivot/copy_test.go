@@ -13,6 +13,7 @@ import (
 
 	"github.com/phoban01/solas/internal/fakekube"
 	solasv1alpha1 "github.com/phoban01/solas/pkg/apis/solas/v1alpha1"
+	"github.com/phoban01/solas/pkg/storage/guard"
 )
 
 func newPivot(t *testing.T, old []runtime.Object, devices ...client.Object) *Pivot {
@@ -162,5 +163,24 @@ func TestVerifyParameters(t *testing.T) {
 	}
 	if problems, _ := p.Verify(ctx); len(problems) != 0 {
 		t.Errorf("after a second copy: %v; want none", problems)
+	}
+}
+
+// TestCopyKeepsFormat: the storage guard stamps solas.dev/format on each
+// write. A second copy keeps it and leaves the Device unchanged.
+func TestCopyKeepsFormat(t *testing.T) {
+	ctx := context.Background()
+	p := newPivot(t, []runtime.Object{oldDevice("gpu-1", "u1", "first")})
+	if _, err := p.Copy(ctx); err != nil {
+		t.Fatal(err)
+	}
+	d := device(t, p, "gpu-1")
+	d.Annotations[guard.FormatAnnotation] = "1"
+	if err := p.Solas.Update(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	r, err := p.Copy(ctx)
+	if err != nil || len(r.Unchanged) != 1 {
+		t.Fatalf("second copy: %+v, %v; want gpu-1 unchanged", r, err)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	solasv1alpha1 "github.com/phoban01/solas/pkg/apis/solas/v1alpha1"
+	"github.com/phoban01/solas/pkg/storage/guard"
 )
 
 // Pivot moves the objects of an old Device CRD into solas.
@@ -123,6 +124,11 @@ func (p *Pivot) upsert(ctx context.Context, o *unstructured.Unstructured) (outco
 	//# set or names another object.
 	if cur.Annotations[AnnotationPivotedFrom] != want.Annotations[AnnotationPivotedFrom] {
 		return conflict, nil
+	}
+	// The storage guard stamps the format of each write. It is not from the
+	// old object, so keep it, or every copy would update the Device.
+	if f, ok := cur.Annotations[guard.FormatAnnotation]; ok {
+		want.Annotations[guard.FormatAnnotation] = f
 	}
 	if same(&cur, want) {
 		return unchanged, nil
