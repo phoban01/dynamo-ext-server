@@ -312,6 +312,7 @@ holder to a different holder.
 A holder is different when any field of `claimRef` differs.
 To move a device, a client MUST first clear `claimRef` and then set it
 in a second update.
+The one exception is a bind against an offer, section 14.2.
 When a status update sets `claimRef` on a free device, the server MUST
 set `status.fencingToken` to the old value plus 1.
 The first bind of a device gets token 1.
@@ -952,3 +953,46 @@ On the DynamoDB store, the restore tool MUST raise each counter item to
 at least `epoch * 2^32`.
 On the etcd store, the operator MUST restore with
 `etcdutl snapshot restore --bump-revision` and `--mark-compacted`.
+
+## 14. Transfer
+
+A holder can hand its device to a named claim, ADR 0019.
+
+### 14.1. Offer
+
+Before it offers a device, the holder's controller MUST set its claim to
+`Transferring`.
+A `Transferring` claim is not in effect, so its workload stops before
+the offer exists.
+The offer MUST be a status update of the device that sets
+`status.offer` to the named claim, its member, and its member UID.
+The offer MUST carry the resource version that the controller read.
+The server MUST reject an offer while a preemption request stands, and a
+second offer while one stands.
+
+### 14.2. Bind against the offer
+
+Only the claim that the offer names, with the member UID that it names,
+MAY bind against the offer.
+The bind MUST be one status update that sets `claimRef` to the named
+claim, sets `status.fencingToken` to the next token, spec 5.3 and 13.2,
+and clears `status.offer`.
+The device is never free in a transfer, so no third claim can take it.
+When the old claim's controller sees that its device names another
+claim, it MUST stop treating the device as its own, and MUST NOT write to
+the device.
+
+### 14.3. Withdraw
+
+The holder MAY withdraw an offer that nobody bound, with a status update
+that clears `status.offer`, and set its claim back to `Bound`.
+The withdraw and the bind against the offer are both conditional writes,
+so only one succeeds.
+The sweeper MUST clear an offer whose member UID is not in the member
+list, as it does for a preemption request, spec 10.9.
+
+### 14.4. Pre-bound claims
+
+A claim MAY name its device in `spec.deviceName`.
+A claim that names a device MUST bind only that device: against an offer
+that names the claim, or as a normal bind when the device is free.

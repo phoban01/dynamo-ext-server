@@ -102,6 +102,9 @@ Claude Code session, so heavy jobs must not overlap.
 - A restore moves the store to a new epoch, which tokens and resource
   versions carry, so they never go back
   ([docs/adr/0018-restore-epoch.md](docs/adr/0018-restore-epoch.md)).
+- A holder transfers a device to a named claim in one write, and a claim
+  can name its device
+  ([docs/adr/0019-transfer.md](docs/adr/0019-transfer.md)).
 
 ## Writing
 

@@ -11,7 +11,8 @@ module solas {
 
   // token is the fencing token of the last bind, spec 5.3.
   // preempt is a preemption request, spec 10.5.
-  type Device = { rv: int, ref: OptRef, token: int, preempt: OptRef }
+  // offer is a transfer offer to a named claim, spec 14.
+  type Device = { rv: int, ref: OptRef, token: int, preempt: OptRef, offer: OptRef }
 
   // A Member object in the table, spec 7.1.
   type MemberObj = { exists: bool, uid: int, rv: int }
@@ -156,13 +157,13 @@ module solas {
     lastRead: cfg.clock0.get(c),
     stale: cfg.devices.mapBy(_ => { muid: -1, at: 0 }),
     sweepPhase: 0,
-    sweepDevs: cfg.devices.mapBy(_ => { rv: 0, ref: Free, token: 0, preempt: Free }),
+    sweepDevs: cfg.devices.mapBy(_ => { rv: 0, ref: Free, token: 0, preempt: Free, offer: Free }),
     sweepUids: Set(),
   }
 
   action init = s' = {
     now: 0,
-    devices: CFG.devices.mapBy(_ => { rv: 0, ref: Free, token: 0, preempt: Free }),
+    devices: CFG.devices.mapBy(_ => { rv: 0, ref: Free, token: 0, preempt: Free, offer: Free }),
     devCounter: 0,
     members: CFG.clusters.mapBy(_ => { exists: false, uid: 0, rv: 0 }),
     memberCounter: 0,
@@ -242,7 +243,7 @@ module solas {
     s.claims.keys().mapBy(k => {
       val cm = s.claims.get(k)
       if (CFG.owner.get(k) == c
-          and cm.phase.in(Set("Bound", "Suspended", "Preempting", "Preempted"))
+          and cm.phase.in(Set("Bound", "Suspended", "Preempting", "Preempted", "Transferring"))
           and cm.muid != uid)
         { ...cm, phase: "Lost" }
       else cm
@@ -490,7 +491,7 @@ module solas {
         or (policy == "Delay" and st.muid == refMuid(listed.ref) and cl.clock >= st.at + CFG.reclaimDelay),
       s' = {
         ...s,
-        devices: s.devices.set(d, { ...s.devices.get(d), rv: rv, ref: Free }),
+        devices: s.devices.set(d, { ...s.devices.get(d), rv: rv, ref: Free, offer: Free }),
         devCounter: rv,
         cleared: true,
         sweptRetained: s.sweptRetained or policy == "Retain",
@@ -525,7 +526,7 @@ module solas {
       CFG.reclaim.get(d) == "Retain",
       not(isFree(dv.ref)),
       not(liveUids(s.members).contains(refMuid(dv.ref))),
-      s' = { ...s, devices: s.devices.set(d, { ...dv, rv: rv, ref: Free }), devCounter: rv, cleared: true },
+      s' = { ...s, devices: s.devices.set(d, { ...dv, rv: rv, ref: Free, offer: Free }), devCounter: rv, cleared: true },
     }
   }
 
@@ -951,6 +952,124 @@ module solas {
     }
   }
 
+  // ---- Transfer, spec 14 ----
+
+  // The holder starts a transfer. Its claim stops being in effect before
+  // it offers the device, so its workload stops first, spec 14.1.
+  action startTransfer(k: str): bool = {
+    val cl = s.clusters.get(CFG.owner.get(k))
+    val cm = s.claims.get(k)
+    all {
+      active(cl),
+      cm.exists,
+      not(cm.deleting),
+      cm.phase == "Bound",
+      s' = { ...s, claims: s.claims.set(k, { ...cm, phase: "Transferring" }) },
+    }
+  }
+
+  // The holder offers its device to claim t of another cluster, with a
+  // conditional write, spec 14.1. The offer names t and the member UID of
+  // t's cluster.
+  action offer(k: str, t: str): bool = {
+    val cm = s.claims.get(k)
+    val d = cm.dev
+    val dv = s.devices.get(d)
+    val tc = s.clusters.get(CFG.owner.get(t))
+    val rv = s.devCounter + 1
+    all {
+      active(s.clusters.get(CFG.owner.get(k))),
+      cm.phase == "Transferring",
+      CFG.owner.get(t) != CFG.owner.get(k),
+      tc.uid != 0,
+      namesWith(dv.ref, k, cm.muid),
+      isFree(dv.offer),
+      isFree(dv.preempt),
+      s' = {
+        ...s,
+        devices: s.devices.set(d, { ...dv, rv: rv,
+          offer: Held({ member: CFG.owner.get(t), muid: tc.uid, claim: t, prio: CFG.priority.get(t) }) }),
+        devCounter: rv,
+      },
+    }
+  }
+
+  // The named claim binds against the offer in one write: claimRef moves
+  // to it, the token goes up, and the offer goes, spec 14.2. The device is
+  // never free, so no third claim can take it. adopt then sets the claim
+  // Bound, as after any bind.
+  action bindOffer(t: str, d: str): bool = {
+    val c = CFG.owner.get(t)
+    val cl = s.clusters.get(c)
+    val dv = s.devices.get(d)
+    val rv = s.devCounter + 1
+    val ref = Held({ member: c, muid: cl.uid, claim: t, prio: CFG.priority.get(t) })
+    all {
+      active(cl),
+      cl.uid != 0,
+      not(cl.draining),
+      s.claims.get(t).exists,
+      s.claims.get(t).phase == "Pending",
+      namesWith(dv.offer, t, cl.uid),
+      not(isFree(dv.ref)),
+      s' = {
+        ...s,
+        devices: s.devices.set(d, { ...dv, rv: rv, ref: ref, token: dv.token + 1, offer: Free }),
+        devCounter: rv,
+        bindings: s.bindings.union(Set({ dev: d, token: dv.token + 1, claim: t })),
+      },
+    }
+  }
+
+  // The holder withdraws an offer that nobody bound, and its claim is in
+  // effect again, spec 14.3. The write is conditional, so a withdraw and a
+  // bind against the offer cannot both succeed.
+  action withdrawOffer(k: str): bool = {
+    val cm = s.claims.get(k)
+    val dv = s.devices.get(cm.dev)
+    val rv = s.devCounter + 1
+    all {
+      active(s.clusters.get(CFG.owner.get(k))),
+      cm.phase == "Transferring",
+      namesWith(dv.ref, k, cm.muid),
+      s' = {
+        ...s,
+        devices: s.devices.set(cm.dev, { ...dv, rv: rv, offer: Free }),
+        devCounter: rv,
+        claims: s.claims.set(k, { ...cm, phase: "Bound" }),
+      },
+    }
+  }
+
+  // The old claim sees that its device names another claim, and lets go
+  // without a write to the device, spec 14.2.
+  action transferDone(k: str): bool = {
+    val cm = s.claims.get(k)
+    all {
+      active(s.clusters.get(CFG.owner.get(k))),
+      cm.phase == "Transferring",
+      not(names(s.devices.get(cm.dev).ref, k)),
+      s' = { ...s, claims: s.claims.set(k, { ...cm, phase: "Pending", dev: "" }) },
+    }
+  }
+
+  // A sweeper clears an offer to a member UID that is not in the member
+  // list, as it does for a request, spec 14.3.
+  action sweepClearOffer(c: str, d: str): bool = {
+    val cl = s.clusters.get(c)
+    val listed = cl.sweepDevs.get(d)
+    val dv = s.devices.get(d)
+    val rv = s.devCounter + 1
+    all {
+      active(cl),
+      cl.sweepPhase == 2,
+      not(isFree(listed.offer)),
+      not(cl.sweepUids.contains(refMuid(listed.offer))),
+      dv.rv == listed.rv,
+      s' = { ...s, devices: s.devices.set(d, { ...dv, rv: rv, offer: Free }), devCounter: rv },
+    }
+  }
+
   // ---- Invariants, spec 8.4 ----
 
   // A request always beats the holder of its device, spec 10.5.
@@ -1027,7 +1146,7 @@ module solas {
   // it, so fencingTest plays it step by step.
   val witnessStaleRejected = not(s.staleRejected)
 
-  action step = any {
+  action baseStep = any {
     nondet c = CFG.clusters.oneOf()
     nondet m = CFG.clusters.oneOf()
     nondet d = CFG.devices.oneOf()
@@ -1071,6 +1190,25 @@ module solas {
       sweepDone(c),
     },
   }
+
+  // The transfer of spec 14. The model-based tests replay baseStep only,
+  // until the server has the transfer.
+  action transferStep = {
+    nondet c = CFG.clusters.oneOf()
+    nondet d = CFG.devices.oneOf()
+    nondet k = CFG.claims.oneOf()
+    nondet t = CFG.claims.oneOf()
+    any {
+      startTransfer(k),
+      offer(k, t),
+      bindOffer(k, d),
+      withdrawOffer(k),
+      transferDone(k),
+      sweepClearOffer(c, d),
+    }
+  }
+
+  action step = any { baseStep, transferStep }
 
   // A step with no faults and no leave, for model-based tests. Random
   // traces of step rarely bind two claims, so they rarely reach a
@@ -1358,6 +1496,49 @@ module solas2 {
     retainedHeld
       .then(operatorRelease("d2"))
       .expect(isFree(s.devices.get("d2").ref) and safety)
+
+  // a2 holds d1. a starts a transfer of d1 to b1, spec 14.
+  run offered =
+    init
+      .then(join("a"))
+      .then(bindSend("a2", "d1"))
+      .then(bindLand({ cluster: "a", claim: "a2", dev: "d1", rv: 0, muid: 1 }))
+      .then(adopt("a2", "d1"))
+      .then(join("b"))
+      .then(startTransfer("a2"))
+      .expect(not(effective("a2")) and safety)
+      .then(offer("a2", "b1"))
+      .expect(names(s.devices.get("d1").offer, "b1") and safety)
+
+  // b1 binds against the offer: d1 names b1 with token 2 in one write, and
+  // a2 lets go without a write.
+  run transferTest =
+    offered
+      .then(bindOffer("b1", "d1"))
+      .then(adopt("b1", "d1"))
+      .then(transferDone("a2"))
+      .expect(s.claims.get("b1").phase == "Bound" and s.devices.get("d1").token == 2
+        and s.claims.get("a2").phase == "Pending" and isFree(s.devices.get("d1").offer) and safety)
+
+  // While the offer stands, a third claim cannot bind d1: a1 sent its bind
+  // before a2 took d1, and the bind lands during the offer.
+  run offerThirdClaimTest =
+    init
+      .then(join("a"))
+      .then(bindSend("a1", "d1"))
+      .then(bindSend("a2", "d1"))
+      .then(bindLand({ cluster: "a", claim: "a2", dev: "d1", rv: 0, muid: 1 }))
+      .then(adopt("a2", "d1"))
+      .then(join("b"))
+      .then(startTransfer("a2"))
+      .then(offer("a2", "b1"))
+      .then(bindLand({ cluster: "a", claim: "a1", dev: "d1", rv: 0, muid: 1 }))
+      .expect(names(s.devices.get("d1").ref, "a2") and names(s.devices.get("d1").offer, "b1") and safety)
+
+  // a withdraws the offer: a2 is in effect again, and b1 can no longer bind.
+  run withdrawn = offered.then(withdrawOffer("a2"))
+    .expect(effective("a2") and isFree(s.devices.get("d1").offer) and safety)
+  run withdrawTest = withdrawn.then(bindOffer("b1", "d1").fail())
 }
 
 // solas2 with d2 under the Delay policy: the sweeper clears it only R = 20

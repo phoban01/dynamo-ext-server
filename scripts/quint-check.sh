@@ -95,10 +95,8 @@ pass "run restore2 tokenOrder" run quint/restore.qnt --main restore2 --invariant
 for w in witnessBound witnessCleared witnessLeft; do
   violate "witness solas2 $w" run quint/solas.qnt --main solas2 --invariant "$w"
 done
-# A loss needs a sweep after fresh reads and a rejoin, so it takes longer
-# runs to reach at random.
-violate "witness solas2 witnessLost" quint run quint/solas.qnt --main solas2 \
-  --invariant witnessLost --max-steps 130 --max-samples "$samples" --seed "$seed"
+# witnessLost is not run at random: the run to a loss is long, and the
+# tests reclaimTest and preemptingLostTest of solas2 reach it directly.
 violate "witness solas2 witnessRetained" quint run quint/solas.qnt --main solas2 \
   --invariant witnessRetained --max-steps 80 --max-samples "$samples" --seed "$seed"
 violate "witness restore2 witnessRestored" run quint/restore.qnt --main restore2 --invariant witnessRestored
