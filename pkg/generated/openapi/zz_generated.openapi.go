@@ -490,6 +490,20 @@ func schema_pkg_apis_solas_v1alpha1_MemberStatus(ref common.ReferenceCallback) c
 							Format:      "",
 						},
 					},
+					"minFormat": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MinFormat is the lowest format that the member supports, spec 11.4. A member with no range supports format 1 only.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"maxFormat": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxFormat is the highest format that the member supports.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 			},
 		},

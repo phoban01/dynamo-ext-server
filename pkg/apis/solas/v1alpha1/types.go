@@ -133,6 +133,13 @@ type MemberStatus struct {
 	// Phase is Active or Draining.
 	// +optional
 	Phase MemberPhase `json:"phase,omitempty"`
+	// MinFormat is the lowest format that the member supports, spec 11.4.
+	// A member with no range supports format 1 only.
+	// +optional
+	MinFormat int32 `json:"minFormat,omitempty"`
+	// MaxFormat is the highest format that the member supports.
+	// +optional
+	MaxFormat int32 `json:"maxFormat,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

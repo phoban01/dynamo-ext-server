@@ -113,6 +113,10 @@ type MemberStatus struct {
 	RenewTime *metav1.MicroTime
 	// Phase is Active or Draining.
 	Phase MemberPhase
+	// MinFormat and MaxFormat are the lowest and the highest format that
+	// the member supports, spec 11.4. Zero reads as 1.
+	MinFormat int32
+	MaxFormat int32
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
