@@ -5,6 +5,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/phoban01/solas/pkg/registry/solas/device"
 	"github.com/phoban01/solas/pkg/registry/solas/member"
 	"github.com/phoban01/solas/pkg/registry/solas/memberpolicy"
+	"github.com/phoban01/solas/pkg/registry/solas/usage"
 )
 
 // Config is the configuration of the solas API server.
@@ -55,7 +57,20 @@ func (c CompletedConfig) New() (*Server, error) {
 		}
 		return obj.(*solas.MemberPolicy), nil
 	}
-	devices, deviceStatus, err := device.NewRESTWithPolicies(Scheme, getter, lookup)
+	opts := device.Options{Policies: lookup}
+	if g, ok := getter.(RESTOptionsGetter); ok {
+		ro, err := g.GetRESTOptions(usage.Resource, nil)
+		if err != nil {
+			return nil, err
+		}
+		raw, _, err := g.RawStorage(ro.StorageConfig, ro.ResourcePrefix,
+			func() runtime.Object { return &solas.MemberUsage{} }, func() runtime.Object { return &solas.MemberUsageList{} })
+		if err != nil {
+			return nil, err
+		}
+		opts.Usage = usage.New(raw)
+	}
+	devices, deviceStatus, err := device.NewRESTWithOptions(Scheme, getter, opts)
 	if err != nil {
 		return nil, err
 	}

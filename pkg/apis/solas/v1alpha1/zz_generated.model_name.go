@@ -68,6 +68,16 @@ func (in MemberStatus) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in MemberUsage) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.MemberUsage"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in MemberUsageList) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.MemberUsageList"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in PreemptionRequest) OpenAPIModelName() string {
 	return "dev.solas.v1alpha1.PreemptionRequest"
 }
@@ -85,4 +95,9 @@ func (in StoreFormat) OpenAPIModelName() string {
 // OpenAPIModelName returns the OpenAPI model name for this type.
 func (in StoreFormatList) OpenAPIModelName() string {
 	return "dev.solas.v1alpha1.StoreFormatList"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in UsageEntry) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.UsageEntry"
 }

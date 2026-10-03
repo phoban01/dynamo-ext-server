@@ -38,6 +38,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&StoreFormatList{},
 		&MemberPolicy{},
 		&MemberPolicyList{},
+		&MemberUsage{},
+		&MemberUsageList{},
 	)
 	return nil
 }

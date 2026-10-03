@@ -255,3 +255,33 @@ type MemberPolicyList struct {
 
 	Items []MemberPolicy `json:"items"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// MemberUsage is the usage set of a limited member, spec 15.2: the devices
+// that it holds or is binding. The API does not serve it; the server
+// writes it at the storage level. Its name is the member name.
+type MemberUsage struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// +listType=atomic
+	Entries []UsageEntry `json:"entries,omitempty"`
+}
+
+// UsageEntry is one device in a usage set.
+type UsageEntry struct {
+	Device string `json:"device"`
+	// Added is when the server added the entry, by its own clock.
+	Added metav1.Time `json:"added"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// MemberUsageList is a list of usage sets.
+type MemberUsageList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []MemberUsage `json:"items"`
+}
