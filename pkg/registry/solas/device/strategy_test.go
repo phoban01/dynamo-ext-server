@@ -2,6 +2,8 @@ package device
 
 import (
 	"context"
+	"k8s.io/apiserver/pkg/authentication/user"
+	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -130,5 +132,31 @@ func TestPreemptorBindClearsTheRequest(t *testing.T) {
 	}
 	if errs := ss.ValidateUpdate(context.Background(), d, old); len(errs) != 0 {
 		t.Errorf("validate: %v", errs)
+	}
+}
+
+//= spec/solas.md#8-5-reclaim-policy
+//= type=test
+//# The release MUST record who released the device.
+
+func TestClearRecordsTheRelease(t *testing.T) {
+	st := NewStatusStrategy(NewStrategy(nil))
+	holder := &solas.ClaimRef{Member: "a", MemberUID: "mu", Namespace: "ns", Name: "c1", UID: "u1"}
+	ctx := genericapirequest.WithUser(context.Background(), &user.DefaultInfo{Name: "alice"})
+
+	old := dev("d", holder)
+	cleared := dev("d", nil)
+	st.PrepareForUpdate(ctx, cleared, old)
+	r := cleared.Status.LastRelease
+	if r == nil || r.By != "alice" || r.Claim.Name != "c1" || r.At.IsZero() {
+		t.Fatalf("release record after a clear = %+v, want alice and c1", r)
+	}
+
+	// Another update keeps the record, whatever the client sends.
+	next := cleared.DeepCopy()
+	next.Status.LastRelease = &solas.Release{By: "mallory"}
+	st.PrepareForUpdate(ctx, next, cleared)
+	if next.Status.LastRelease == nil || next.Status.LastRelease.By != "alice" {
+		t.Errorf("record after a later update = %+v, want the server's record", next.Status.LastRelease)
 	}
 }

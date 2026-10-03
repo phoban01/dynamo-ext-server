@@ -46,6 +46,9 @@ type DeviceStatus struct {
 	Preemption *PreemptionRequest
 	// Conditions hold the health of the device, spec 10.1.
 	Conditions []metav1.Condition
+	// LastRelease records the last clear of claimRef: who did it, when,
+	// and which claim held the device, spec 8.5. The server sets it.
+	LastRelease *Release
 }
 
 // PreemptionRequest asks the holder to give up the device, spec 10.5.
@@ -166,3 +169,13 @@ const (
 	ReclaimDelay  ReclaimPolicy = "Delay"
 	ReclaimRetain ReclaimPolicy = "Retain"
 )
+
+// Release records a clear of the claimRef of a device, spec 8.5.
+type Release struct {
+	// By is the user that made the request, as the API server saw it.
+	By string
+	// At is the time of the clear, by the clock of the API server.
+	At metav1.Time
+	// Claim is the claimRef that the clear removed.
+	Claim ClaimRef
+}

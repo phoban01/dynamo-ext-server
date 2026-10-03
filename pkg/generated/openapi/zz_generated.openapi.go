@@ -29,6 +29,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1alpha1.MemberSpec{}.OpenAPIModelName():          schema_pkg_apis_solas_v1alpha1_MemberSpec(ref),
 		v1alpha1.MemberStatus{}.OpenAPIModelName():        schema_pkg_apis_solas_v1alpha1_MemberStatus(ref),
 		v1alpha1.PreemptionRequest{}.OpenAPIModelName():   schema_pkg_apis_solas_v1alpha1_PreemptionRequest(ref),
+		v1alpha1.Release{}.OpenAPIModelName():             schema_pkg_apis_solas_v1alpha1_Release(ref),
 		v1alpha1.StoreFormat{}.OpenAPIModelName():         schema_pkg_apis_solas_v1alpha1_StoreFormat(ref),
 		v1alpha1.StoreFormatList{}.OpenAPIModelName():     schema_pkg_apis_solas_v1alpha1_StoreFormatList(ref),
 		resource.Quantity{}.OpenAPIModelName():            schema_apimachinery_pkg_api_resource_Quantity(ref),
@@ -363,11 +364,17 @@ func schema_pkg_apis_solas_v1alpha1_DeviceStatus(ref common.ReferenceCallback) c
 							},
 						},
 					},
+					"lastRelease": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LastRelease records the last clear of claimRef: who did it, when, and which claim held the device, spec 8.5. The server sets it.",
+							Ref:         ref(v1alpha1.Release{}.OpenAPIModelName()),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			v1alpha1.ClaimRef{}.OpenAPIModelName(), v1alpha1.PreemptionRequest{}.OpenAPIModelName(), v1.Condition{}.OpenAPIModelName()},
+			v1alpha1.ClaimRef{}.OpenAPIModelName(), v1alpha1.PreemptionRequest{}.OpenAPIModelName(), v1alpha1.Release{}.OpenAPIModelName(), v1.Condition{}.OpenAPIModelName()},
 	}
 }
 
@@ -550,6 +557,43 @@ func schema_pkg_apis_solas_v1alpha1_PreemptionRequest(ref common.ReferenceCallba
 					},
 				},
 				Required: []string{"claim"},
+			},
+		},
+		Dependencies: []string{
+			v1alpha1.ClaimRef{}.OpenAPIModelName(), v1.Time{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_solas_v1alpha1_Release(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Release records a clear of the claimRef of a device, spec 8.5.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"by": {
+						SchemaProps: spec.SchemaProps{
+							Description: "By is the user that made the request, as the API server saw it.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"at": {
+						SchemaProps: spec.SchemaProps{
+							Description: "At is the time of the clear, by the clock of the API server.",
+							Ref:         ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
+					"claim": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Claim is the claimRef that the clear removed.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(v1alpha1.ClaimRef{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"by", "at", "claim"},
 			},
 		},
 		Dependencies: []string{

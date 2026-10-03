@@ -370,10 +370,10 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[implementation]: `R` is `spec.reclaimDelaySeconds` of the device.
     TEXT[!MUST,implementation,test]: Under `Retain`, the sweeper MUST NOT clear the `claimRef`.
     TEXT[!MAY]: An operator MAY release a retained device.
-    TEXT[!MUST]: The release MUST be a status update that clears `claimRef` and carries
-    TEXT[!MUST]: the resource version that the operator read.
-    TEXT[!MUST]: The release MUST fail while the holder's member UID is live.
-    TEXT[!MUST]: The release MUST record who released the device.
+    TEXT[!MUST,implementation]: The release MUST be a status update that clears `claimRef` and carries
+    TEXT[!MUST,implementation]: the resource version that the operator read.
+    TEXT[!MUST,implementation,test]: The release MUST fail while the holder's member UID is live.
+    TEXT[!MUST,implementation,test]: The release MUST record who released the device.
 
   SECTION: [9.1. Mapping](#9-1-mapping)
     TEXT[!MUST,implementation]: The old object and its Device MUST have the same name.
