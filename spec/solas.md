@@ -555,6 +555,19 @@ The observer MUST NOT compare `renewTime` with its own clock.
 `renewTime` comes from another clock, and the two clocks can disagree by
 any amount.
 
+An observer MUST count only time during which it reads the member list.
+When the observer has not read the member list for longer than the read
+gap `G`, it MUST forget the local times that it recorded, and record
+them again from its next read.
+The default `G` is twice the sweep interval.
+The sweeper MUST NOT delete a `Member` unless its last read of the
+member list is at most `G` old.
+In a store outage longer than `D`, no member can renew.
+Without this rule, every observer would treat every member as expired
+when the store returns, and sweep the whole mesh at once.
+Forgetting only makes a sweep later, so it keeps the safety of 8.4.
+`quint/negative/outage-sweep.qnt` shows the sweep without the rule.
+
 ### 8.2. Delete an expired member
 
 The sweeper MUST delete an expired `Member` with the resource version

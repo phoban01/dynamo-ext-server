@@ -23,5 +23,6 @@ module members_first {
     noPreemptionWait: false,
     version: Map("a" -> 1, "b" -> 2),
     skipTokenVersion: 0,
+    readGap: 15,
   }).* from "../solas"
 }

@@ -32,9 +32,13 @@ type Sweeper struct {
 	ClusterID string
 	Clock     clock.PassiveClock
 	Interval  time.Duration
+	// ReadGap is the read gap G of spec 8.1. Zero means twice Interval.
+	ReadGap time.Duration
 
 	mu   sync.Mutex
 	seen map[string]observation
+	// lastRead is the local time of the last member list that worked.
+	lastRead time.Time
 }
 
 //= spec/solas.md#8-1-expiry-on-the-observer
@@ -72,6 +76,23 @@ func (s *Sweeper) expire(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	//= spec/solas.md#8-1-expiry-on-the-observer
+	//# An observer MUST count only time during which it reads the member list.
+
+	//= spec/solas.md#8-1-expiry-on-the-observer
+	//# When the observer has not read the member list for longer than the read
+	//# gap `G`, it MUST forget the local times that it recorded, and record
+	//# them again from its next read.
+	//
+	// The list above worked. After a gap, as in a store outage, the
+	// observations start again, so no member counts as expired before it
+	// had D to renew. The deletes below run right after this read, so they
+	// keep the rule that the last read is at most G old.
+	now := s.Clock.Now()
+	if !s.lastRead.IsZero() && now.Sub(s.lastRead) > s.readGap() {
+		s.seen = nil
+	}
+	s.lastRead = now
 	if s.seen == nil {
 		s.seen = map[string]observation{}
 	}
@@ -188,4 +209,14 @@ func (s *Sweeper) clearStale(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+//= spec/solas.md#8-1-expiry-on-the-observer
+//# The default `G` is twice the sweep interval.
+
+func (s *Sweeper) readGap() time.Duration {
+	if s.ReadGap > 0 {
+		return s.ReadGap
+	}
+	return 2 * s.Interval
 }

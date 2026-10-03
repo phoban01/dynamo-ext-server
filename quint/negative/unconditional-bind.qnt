@@ -22,5 +22,6 @@ module unconditional_bind {
     noPreemptionWait: false,
     version: Map("a" -> 1, "b" -> 2),
     skipTokenVersion: 0,
+    readGap: 15,
   }).* from "../solas"
 }

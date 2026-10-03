@@ -329,6 +329,13 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: current resource version of each `Member`.
     TEXT[!MUST,implementation,test]: The observer MUST treat the `Member` as expired from local time `T + D`.
     TEXT[!MUST,implementation]: The observer MUST NOT compare `renewTime` with its own clock.
+    TEXT[!MUST,implementation,test]: An observer MUST count only time during which it reads the member list.
+    TEXT[!MUST,implementation,test]: When the observer has not read the member list for longer than the read
+    TEXT[!MUST,implementation,test]: gap `G`, it MUST forget the local times that it recorded, and record
+    TEXT[!MUST,implementation,test]: them again from its next read.
+    TEXT[implementation]: The default `G` is twice the sweep interval.
+    TEXT[!MUST]: The sweeper MUST NOT delete a `Member` unless its last read of the
+    TEXT[!MUST]: member list is at most `G` old.
 
   SECTION: [8.2. Delete an expired member](#8-2-delete-an-expired-member)
     TEXT[!MUST,implementation,test]: The sweeper MUST delete an expired `Member` with the resource version

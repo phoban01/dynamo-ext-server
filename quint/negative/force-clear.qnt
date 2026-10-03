@@ -24,6 +24,7 @@ module force_clear {
     noPreemptionWait: false,
     version: Map("a" -> 1, "b" -> 2),
     skipTokenVersion: 0,
+    readGap: 15,
   }).* from "../solas"
 
   pure val noDrift = Map("a" -> 0, "b" -> 0)

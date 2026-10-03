@@ -32,6 +32,8 @@ type Config struct {
 	// NoLeave turns off the random graceful leave, for scenarios that need
 	// every member Active.
 	NoLeave bool
+	// NoPause turns off the random pause of a cluster.
+	NoPause bool
 }
 
 // DefaultConfig is the configuration of the gate.
@@ -66,6 +68,8 @@ type World struct {
 	step         int
 	// finalized is the finalized format of the store, spec 11.1.
 	finalized int32
+	// outage makes every call to the shared store fail, spec 8.1.
+	outage bool
 }
 
 // gate is a device gatekeeper, spec 6.6.
@@ -107,7 +111,9 @@ func NewWorld(ctx context.Context, seed uint64, cfg Config) (*World, error) {
 	for i := range cfg.Clusters {
 		// The clocks start far apart; solas does not depend on synced clocks.
 		start := time.Unix(int64(1_000_000*(i+1)), 0)
-		w.clusters = append(w.clusters, newCluster(fmt.Sprintf("c%d", i), w.shared, start, cfg.Settings, w.rng, cfg.Lag))
+		c := newCluster(fmt.Sprintf("c%d", i), w.shared, start, cfg.Settings, w.rng, cfg.Lag)
+		c.client.outage = &w.outage
+		w.clusters = append(w.clusters, c)
 	}
 	return w, nil
 }
@@ -175,7 +181,7 @@ func (w *World) Step(ctx context.Context) {
 		w.createClaim(ctx, c)
 	case roll < 88:
 		w.deleteClaim(ctx, c)
-	case roll < 91:
+	case roll < 91 && !w.cfg.NoPause:
 		c.paused = true
 		w.log("%s pause", c.name)
 	case roll < 93:

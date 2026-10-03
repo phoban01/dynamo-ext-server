@@ -62,7 +62,7 @@ func TestExpireAfterDOnTheObserverClock(t *testing.T) {
 	if err := s.Run(ctx); err != nil { // first sight of b at T
 		t.Fatal(err)
 	}
-	clk.SetTime(clk.Now().Add(29 * time.Second))
+	advance(t, s, clk, 29*time.Second)
 	if err := s.Run(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -231,5 +231,54 @@ func TestClearStaleRequests(t *testing.T) {
 	}
 	if d.Status.Preemption != nil || d.Status.ClaimRef == nil {
 		t.Errorf("request %+v, holder %+v; want the request gone and the holder kept", d.Status.Preemption, d.Status.ClaimRef)
+	}
+}
+
+// advance moves the clock by d in steps of at most the sweep interval, and
+// runs the sweeper after each step, as Start does.
+func advance(t *testing.T, s *Sweeper, clk *clocktesting.FakePassiveClock, d time.Duration) {
+	t.Helper()
+	for d > 0 {
+		step := min(d, s.Interval)
+		clk.SetTime(clk.Now().Add(step))
+		d -= step
+		if err := s.Run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+//= spec/solas.md#8-1-expiry-on-the-observer
+//= type=test
+//# When the observer has not read the member list for longer than the read
+//# gap `G`, it MUST forget the local times that it recorded, and record
+//# them again from its next read.
+
+// TestOutageRestartsTheTimer: the store is down for longer than D, so the
+// sweeper cannot list and b cannot renew. When the store returns, the
+// sweeper does not delete b at once. It waits a full D from its first read
+// after the outage.
+func TestOutageRestartsTheTimer(t *testing.T) {
+	ctx := context.Background()
+	c := fakekube.NewClient(member("a", "ua"), member("b", "ub"))
+	clk := clocktesting.NewFakePassiveClock(time.Unix(5000, 0))
+	s := newSweeper(c, clk)
+	if err := s.Run(ctx); err != nil { // first sight of b
+		t.Fatal(err)
+	}
+	clk.SetTime(clk.Now().Add(2 * time.Minute)) // the outage: no run works
+	if err := s.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(t, c, "b") {
+		t.Fatal("b deleted on the first read after the outage")
+	}
+	advance(t, s, clk, 29*time.Second)
+	if !exists(t, c, "b") {
+		t.Fatal("b deleted before D after the outage")
+	}
+	advance(t, s, clk, time.Second)
+	if exists(t, c, "b") {
+		t.Error("b, which never renewed, not deleted D after the outage")
 	}
 }

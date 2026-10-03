@@ -66,6 +66,10 @@ pass "negative no-token-check" quint test quint/negative/no-token-check.qnt \
 # claimMatchesDevice.
 # The test passes when a release that does not raise the token breaks
 # tokensUnique, spec 11.2.
+# The test passes when an observer that keeps its observations across a
+# store outage sweeps a member right after it, spec 8.1.
+pass "negative outage-sweep" quint test quint/negative/outage-sweep.qnt \
+  --main outage_sweep --match sweepOnReturnTest
 pass "negative no-token-raise" quint test quint/negative/no-token-raise.qnt \
   --main no_token_raise --match tokenRaiseTest
 pass "negative force-clear" quint test quint/negative/force-clear.qnt \
@@ -81,9 +85,13 @@ pass "run no-margin fencing" run quint/negative/no-margin.qnt --invariant fencin
 pass "run store3 storeSafety" run quint/store.qnt --main store3 --invariant storeSafety
 pass "run migrate2 migrateSafety" run quint/migrate.qnt --main migrate2 --invariant migrateSafety
 
-for w in witnessBound witnessCleared witnessLost witnessLeft; do
+for w in witnessBound witnessCleared witnessLeft; do
   violate "witness solas2 $w" run quint/solas.qnt --main solas2 --invariant "$w"
 done
+# A loss needs a sweep after fresh reads and a rejoin, so it takes longer
+# runs to reach at random.
+violate "witness solas2 witnessLost" quint run quint/solas.qnt --main solas2 \
+  --invariant witnessLost --max-steps 80 --max-samples "$samples" --seed "$seed"
 for w in witnessSwitched witnessBoundOnDst; do
   violate "witness migrate2 $w" run quint/migrate.qnt --main migrate2 --invariant "$w"
 done

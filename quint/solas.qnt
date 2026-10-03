@@ -48,6 +48,9 @@ module solas {
     renewRv: int,
     draining: bool,
     seen: str -> Seen,
+    // lastRead is the local time of the last read of the member list that
+    // worked, spec 8.1.
+    lastRead: int,
     sweepPhase: int,
     sweepDevs: str -> Device,
     sweepUids: Set[int],
@@ -91,6 +94,10 @@ module solas {
     // none. The negative model no-token-raise sets it.
     version: str -> int,
     skipTokenVersion: int,
+    // readGap is how long an observer may go without a read of the member
+    // list before it forgets what it saw, spec 8.1. 0 turns it off; the
+    // negative model outage-sweep does that.
+    readGap: int,
   }
 
   type State = {
@@ -135,6 +142,7 @@ module solas {
     renewRv: 0,
     draining: false,
     seen: cfg.clusters.mapBy(_ => NOSEEN),
+    lastRead: cfg.clock0.get(c),
     sweepPhase: 0,
     sweepDevs: cfg.devices.mapBy(_ => { rv: 0, ref: Free, token: 0, preempt: Free }),
     sweepUids: Set(),
@@ -352,13 +360,35 @@ module solas {
     val cl = s.clusters.get(c)
     val mo = s.members.get(m)
     val now = if (mo.exists) { rv: mo.rv, at: cl.clock } else NOSEEN
+    val seen = afterGap(cl).set(m, now)
     all {
       active(cl),
       m != c,
       cl.seen.get(m).rv != now.rv,
       s' = {
         ...s,
-        clusters: s.clusters.set(c, { ...cl, seen: cl.seen.set(m, now) }),
+        clusters: s.clusters.set(c, { ...cl, seen: seen, lastRead: cl.clock }),
+      },
+    }
+  }
+
+  // An observer that went longer than readGap without a read of the member
+  // list forgets what it saw, and measures again from its next read. So
+  // after a store outage it waits a full D from the return, spec 8.1.
+  def afterGap(cl: Cluster): str -> Seen =
+    if (CFG.readGap > 0 and cl.clock > cl.lastRead + CFG.readGap)
+      cl.seen.keys().mapBy(_ => NOSEEN)
+    else cl.seen
+
+  // A read of the member list that works and shows no change, spec 8.1.
+  action readMembers(c: str): bool = {
+    val cl = s.clusters.get(c)
+    all {
+      active(cl),
+      cl.lastRead != cl.clock,
+      s' = {
+        ...s,
+        clusters: s.clusters.set(c, { ...cl, seen: afterGap(cl), lastRead: cl.clock }),
       },
     }
   }
@@ -374,6 +404,8 @@ module solas {
       m != c,
       seen.rv >= 0,
       cl.clock >= seen.at + CFG.D,
+      // The observer read the member list a short time ago, spec 8.1.
+      CFG.readGap == 0 or cl.clock <= cl.lastRead + CFG.readGap,
       mo.exists,
       mo.rv == seen.rv,
       s' = {
@@ -969,6 +1001,7 @@ module solas {
       crash(c),
       recover(c),
       observe(c, m),
+      readMembers(c),
       sweepDelete(c, m),
       sweepListDevices(c),
       sweepListMembers(c),
@@ -1026,6 +1059,7 @@ module solas2 {
     noPreemptionWait: false,
     version: Map("a" -> 1, "b" -> 2),
     skipTokenVersion: 0,
+    readGap: 15,
   }).*
 
   pure val fastB = Map("a" -> 0, "b" -> 1)
@@ -1049,9 +1083,9 @@ module solas2 {
       .then(adopt("a1", "d1"))
       .then(observe("b", "a"))
       .then(crash("a"))
-      .then(tickBy(fastB))
-      .then(tickBy(fastB))
-      .then(tickBy(fastB))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
       .then(sweepDelete("b", "a"))
       .then(sweepListDevices("b"))
       .then(sweepListMembers("b"))
@@ -1069,9 +1103,9 @@ module solas2 {
       .then(bindSend("a1", "d1"))
       .then(bindLand({ cluster: "a", claim: "a1", dev: "d1", rv: 0, muid: 1 }))
       .then(observe("b", "a"))
-      .then(tickBy(fastB))
-      .then(tickBy(fastB))
-      .then(tickBy(fastB))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
       .then(sweepDelete("b", "a"))
       .then(renewSend("a"))
       .then(renewLand("a"))
@@ -1089,9 +1123,9 @@ module solas2 {
       .then(adopt("a1", "d1"))
       .then(use("a1"))
       .then(observe("b", "a"))
-      .then(tickBy(fastB))
-      .then(tickBy(fastB))
-      .then(tickBy(fastB))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
       .then(sweepDelete("b", "a"))
       .then(sweepListDevices("b"))
       .then(sweepListMembers("b"))
@@ -1161,9 +1195,9 @@ module solas2 {
     allHeld
       .then(requestPreemption("b1", "d1"))
       .then(observe("b", "a"))
-      .then(tickBy(fastB))
-      .then(tickBy(fastB))
-      .then(tickBy(fastB))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
       .then(sweepDelete("b", "a"))
       .then(sweepListDevices("b"))
       .then(sweepListMembers("b"))
@@ -1185,9 +1219,9 @@ module solas2 {
       .then(seePreemption("a2"))
       .then(observe("b", "a"))
       .then(crash("a"))
-      .then(tickBy(fastB))
-      .then(tickBy(fastB))
-      .then(tickBy(fastB))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
       .then(sweepDelete("b", "a"))
       .then(sweepListDevices("b"))
       .then(sweepListMembers("b"))
@@ -1195,4 +1229,42 @@ module solas2 {
       .then(recover("a"))
       .then(join("a"))
       .expect(safety and s.claims.get("a2").phase == "Lost")
+
+  // The store is down for longer than D: no read and no write works while
+  // the clocks go on. b saw a's Member before the outage, spec 8.1.
+  run outage =
+    init
+      .then(join("a"))
+      .then(join("b"))
+      .then(observe("b", "a"))
+      .then(tickBy(fastB))
+      .then(tickBy(fastB))
+      .then(tickBy(fastB))
+
+  // When the store returns, b cannot sweep a at once: its reads are not
+  // fresh, and its first read starts the measurement again.
+  run outageNoSweepTest = outage.then(sweepDelete("b", "a").fail())
+  run outageFirstReadTest = outage.then(readMembers("b")).then(sweepDelete("b", "a").fail())
+
+  // a renews after the outage and keeps its Member.
+  run outageRenewTest =
+    outage
+      .then(readMembers("b"))
+      .then(renewSend("a"))
+      .then(renewLand("a"))
+      .then(observe("b", "a"))
+      .expect(s.members.get("a").exists and safety)
+
+  // A member that stops for good is still swept, a full D after the store
+  // returns.
+  run outageStillSweptTest =
+    outage
+      .then(crash("a"))
+      .then(readMembers("b"))
+      .then(observe("b", "a"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(sweepDelete("b", "a"))
+      .expect(not(s.members.get("a").exists) and safety)
 }
