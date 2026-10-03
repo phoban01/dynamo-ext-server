@@ -634,7 +634,7 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MAY]: An operator MAY limit a member, ADR 0021.
 
   SECTION: [15.1. Policy](#15-1-policy)
-    TEXT[!MUST]: A `MemberPolicy` MUST have the name of the member that it limits.
+    TEXT[!MUST,implementation,test]: A `MemberPolicy` MUST have the name of the member that it limits.
     TEXT[!MUST]: A member MUST NOT hold more devices than its `maxDevices`.
 
   SECTION: [15.2. Usage set](#15-2-usage-set)

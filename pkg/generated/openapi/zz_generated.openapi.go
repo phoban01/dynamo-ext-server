@@ -26,6 +26,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1alpha1.DeviceStatus{}.OpenAPIModelName():        schema_pkg_apis_solas_v1alpha1_DeviceStatus(ref),
 		v1alpha1.Member{}.OpenAPIModelName():              schema_pkg_apis_solas_v1alpha1_Member(ref),
 		v1alpha1.MemberList{}.OpenAPIModelName():          schema_pkg_apis_solas_v1alpha1_MemberList(ref),
+		v1alpha1.MemberPolicy{}.OpenAPIModelName():        schema_pkg_apis_solas_v1alpha1_MemberPolicy(ref),
+		v1alpha1.MemberPolicyList{}.OpenAPIModelName():    schema_pkg_apis_solas_v1alpha1_MemberPolicyList(ref),
+		v1alpha1.MemberPolicySpec{}.OpenAPIModelName():    schema_pkg_apis_solas_v1alpha1_MemberPolicySpec(ref),
 		v1alpha1.MemberSpec{}.OpenAPIModelName():          schema_pkg_apis_solas_v1alpha1_MemberSpec(ref),
 		v1alpha1.MemberStatus{}.OpenAPIModelName():        schema_pkg_apis_solas_v1alpha1_MemberStatus(ref),
 		v1alpha1.PreemptionRequest{}.OpenAPIModelName():   schema_pkg_apis_solas_v1alpha1_PreemptionRequest(ref),
@@ -470,6 +473,136 @@ func schema_pkg_apis_solas_v1alpha1_MemberList(ref common.ReferenceCallback) com
 		},
 		Dependencies: []string{
 			v1alpha1.Member{}.OpenAPIModelName(), v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_solas_v1alpha1_MemberPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "MemberPolicy limits one member, spec 15.1. Its name is the cluster ID of the member. An operator writes it.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1alpha1.MemberPolicySpec{}.OpenAPIModelName()),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			v1alpha1.MemberPolicySpec{}.OpenAPIModelName(), v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_solas_v1alpha1_MemberPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "MemberPolicyList is a list of member policies.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(v1alpha1.MemberPolicy{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			v1alpha1.MemberPolicy{}.OpenAPIModelName(), v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_solas_v1alpha1_MemberPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "MemberPolicySpec holds the limits of a member. A limit that is not set is no limit.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"maxDevices": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxDevices is the most devices that the member may hold.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"bindsPerMinute": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BindsPerMinute is the rate of binds of the member, spec 15.2.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"preemptionsPerMinute": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PreemptionsPerMinute is the rate of preemption requests of the member.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"allowProtected": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AllowProtected lets the member mark its claims as protected, so their devices cannot be preempted, spec 10.10.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

@@ -189,3 +189,21 @@ func validateReclaim(spec *solas.DeviceSpec, path *field.Path) field.ErrorList {
 	}
 	return errs
 }
+
+//= spec/solas.md#15-1-policy
+//# A `MemberPolicy` MUST have the name of the member that it limits.
+
+// ValidateMemberPolicy checks a member policy. Its name is a member name,
+// and no limit is negative.
+func ValidateMemberPolicy(p *solas.MemberPolicy) field.ErrorList {
+	errs := genericvalidation.ValidateObjectMeta(&p.ObjectMeta, false, genericvalidation.NameIsDNSSubdomain, metaPath)
+	spec := field.NewPath("spec")
+	for name, v := range map[string]*int32{
+		"maxDevices": p.Spec.MaxDevices, "bindsPerMinute": p.Spec.BindsPerMinute, "preemptionsPerMinute": p.Spec.PreemptionsPerMinute,
+	} {
+		if v != nil && *v < 0 {
+			errs = append(errs, field.Invalid(spec.Child(name), *v, "must not be negative"))
+		}
+	}
+	return errs
+}

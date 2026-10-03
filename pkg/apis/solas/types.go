@@ -181,3 +181,37 @@ type Release struct {
 	// Claim is the claimRef that the clear removed.
 	Claim ClaimRef
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// MemberPolicy limits one member, spec 15.1. Its name is the cluster ID of
+// the member. An operator writes it.
+type MemberPolicy struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+
+	Spec MemberPolicySpec
+}
+
+// MemberPolicySpec holds the limits of a member. A limit that is not set
+// is no limit.
+type MemberPolicySpec struct {
+	// MaxDevices is the most devices that the member may hold.
+	MaxDevices *int32
+	// BindsPerMinute and PreemptionsPerMinute are rates, spec 15.2.
+	BindsPerMinute       *int32
+	PreemptionsPerMinute *int32
+	// AllowProtected lets the member mark its claims as protected, so
+	// their devices cannot be preempted, spec 10.10.
+	AllowProtected bool
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// MemberPolicyList is a list of member policies.
+type MemberPolicyList struct {
+	metav1.TypeMeta
+	metav1.ListMeta
+
+	Items []MemberPolicy
+}

@@ -8,6 +8,7 @@ import (
 	"github.com/phoban01/solas/pkg/apis/solas"
 	"github.com/phoban01/solas/pkg/registry/solas/device"
 	"github.com/phoban01/solas/pkg/registry/solas/member"
+	"github.com/phoban01/solas/pkg/registry/solas/memberpolicy"
 )
 
 // Config is the configuration of the solas API server.
@@ -41,6 +42,10 @@ func (c CompletedConfig) New() (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	policies, err := memberpolicy.NewREST(Scheme, getter)
+	if err != nil {
+		return nil, err
+	}
 	members, memberStatus, err := member.NewREST(Scheme, getter)
 	if err != nil {
 		return nil, err
@@ -52,6 +57,7 @@ func (c CompletedConfig) New() (*Server, error) {
 		"devices/status": deviceStatus,
 		"members":        members,
 		"members/status": memberStatus,
+		"memberpolicies": policies,
 	}
 	if err := generic.InstallAPIGroup(&group); err != nil {
 		return nil, err

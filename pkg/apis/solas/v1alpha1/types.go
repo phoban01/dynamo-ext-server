@@ -210,3 +210,44 @@ type Release struct {
 	// Claim is the claimRef that the clear removed.
 	Claim ClaimRef `json:"claim"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// MemberPolicy limits one member, spec 15.1. Its name is the cluster ID of
+// the member. An operator writes it.
+type MemberPolicy struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec MemberPolicySpec `json:"spec,omitempty"`
+}
+
+// MemberPolicySpec holds the limits of a member. A limit that is not set
+// is no limit.
+type MemberPolicySpec struct {
+	// MaxDevices is the most devices that the member may hold.
+	// +optional
+	MaxDevices *int32 `json:"maxDevices,omitempty"`
+	// BindsPerMinute is the rate of binds of the member, spec 15.2.
+	// +optional
+	BindsPerMinute *int32 `json:"bindsPerMinute,omitempty"`
+	// PreemptionsPerMinute is the rate of preemption requests of the member.
+	// +optional
+	PreemptionsPerMinute *int32 `json:"preemptionsPerMinute,omitempty"`
+	// AllowProtected lets the member mark its claims as protected, so
+	// their devices cannot be preempted, spec 10.10.
+	// +optional
+	AllowProtected bool `json:"allowProtected,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// MemberPolicyList is a list of member policies.
+type MemberPolicyList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []MemberPolicy `json:"items"`
+}

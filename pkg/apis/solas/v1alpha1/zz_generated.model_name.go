@@ -43,6 +43,21 @@ func (in MemberList) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in MemberPolicy) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.MemberPolicy"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in MemberPolicyList) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.MemberPolicyList"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in MemberPolicySpec) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.MemberPolicySpec"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in MemberSpec) OpenAPIModelName() string {
 	return "dev.solas.v1alpha1.MemberSpec"
 }
