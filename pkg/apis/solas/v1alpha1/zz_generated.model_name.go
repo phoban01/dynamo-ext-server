@@ -8,6 +8,11 @@
 package v1alpha1
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in Bucket) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.Bucket"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in ClaimRef) OpenAPIModelName() string {
 	return "dev.solas.v1alpha1.ClaimRef"
 }

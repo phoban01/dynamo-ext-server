@@ -654,8 +654,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: fewer devices than `maxDevices`.
     TEXT[!MUST,implementation]: The device write MUST follow in the same request.
     TEXT[!MUST,implementation]: A bind over the limit MUST fail with `403 Forbidden`.
-    TEXT[!MUST]: A bind or a preemption request over a rate MUST fail with
-    TEXT[!MUST]: `429 Too Many Requests`.
+    TEXT[!MUST,implementation,test]: A bind or a preemption request over a rate MUST fail with
+    TEXT[!MUST,implementation,test]: `429 Too Many Requests`.
 
   SECTION: [15.3. Cleanup](#15-3-cleanup)
     TEXT[!MUST,implementation]: A clear of a device MUST remove it from the usage set of its member.

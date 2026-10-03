@@ -229,6 +229,8 @@ type MemberUsage struct {
 	metav1.ObjectMeta
 
 	Entries []UsageEntry
+	// Buckets are the token buckets of the rates, spec 15.2.
+	Buckets []Bucket
 }
 
 // UsageEntry is one device in a usage set.
@@ -236,6 +238,15 @@ type UsageEntry struct {
 	Device string
 	// Added is when the server added the entry, by its own clock.
 	Added metav1.Time
+}
+
+// Bucket is a token bucket of one rate: binds or preemptions.
+type Bucket struct {
+	Kind string
+	// Tokens is the number of tokens left, in thousandths.
+	Tokens int64
+	// Last is when the bucket was last filled, by the server clock.
+	Last metav1.Time
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

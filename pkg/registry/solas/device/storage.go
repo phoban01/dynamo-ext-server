@@ -35,7 +35,8 @@ func NewREST(scheme *runtime.Scheme, optsGetter generic.RESTOptionsGetter) (*RES
 
 // Usage keeps the usage sets of limited members, spec 15.2.
 type Usage interface {
-	Reserve(ctx context.Context, member, device string, max int32) error
+	Admit(ctx context.Context, member, device string, max, rate *int32) error
+	TakePreemption(ctx context.Context, member string, rate int32) error
 	Remove(ctx context.Context, member, device string) error
 }
 
@@ -172,8 +173,19 @@ func (r *StatusREST) Update(ctx context.Context, name string, objInfo rest.Updat
 		// A failed device write leaves the entry. The cleanup takes it out
 		// after a grace, spec 15.3: removing it here could remove the entry
 		// of a second bind of the same device that is still in flight.
-		if p != nil && p.Spec.MaxDevices != nil {
-			if err := r.usage.Reserve(ctx, newRef.Member, name, *p.Spec.MaxDevices); err != nil {
+		if p != nil && (p.Spec.MaxDevices != nil || p.Spec.BindsPerMinute != nil) {
+			if err := r.usage.Admit(ctx, newRef.Member, name, p.Spec.MaxDevices, p.Spec.BindsPerMinute); err != nil {
+				return nil, false, err
+			}
+		}
+	}
+	if req := next.(*solas.Device).Status.Preemption; req != nil && (old.Status.Preemption == nil || old.Status.Preemption.Claim.UID != req.Claim.UID) {
+		p, err := r.policies(ctx, req.Claim.Member)
+		if err != nil {
+			return nil, false, err
+		}
+		if p != nil && p.Spec.PreemptionsPerMinute != nil {
+			if err := r.usage.TakePreemption(ctx, req.Claim.Member, *p.Spec.PreemptionsPerMinute); err != nil {
 				return nil, false, err
 			}
 		}

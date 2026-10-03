@@ -19,6 +19,7 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
+		v1alpha1.Bucket{}.OpenAPIModelName():              schema_pkg_apis_solas_v1alpha1_Bucket(ref),
 		v1alpha1.ClaimRef{}.OpenAPIModelName():            schema_pkg_apis_solas_v1alpha1_ClaimRef(ref),
 		v1alpha1.Device{}.OpenAPIModelName():              schema_pkg_apis_solas_v1alpha1_Device(ref),
 		v1alpha1.DeviceList{}.OpenAPIModelName():          schema_pkg_apis_solas_v1alpha1_DeviceList(ref),
@@ -93,6 +94,43 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		runtime.TypeMeta{}.OpenAPIModelName():             schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
 		runtime.Unknown{}.OpenAPIModelName():              schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
 		version.Info{}.OpenAPIModelName():                 schema_k8sio_apimachinery_pkg_version_Info(ref),
+	}
+}
+
+func schema_pkg_apis_solas_v1alpha1_Bucket(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Bucket is a token bucket of one rate: binds or preemptions.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"tokens": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Tokens is the number of tokens left, in thousandths.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"last": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Last is when the bucket was last filled, by the server clock.",
+							Ref:         ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"kind", "tokens", "last"},
+			},
+		},
+		Dependencies: []string{
+			v1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -722,11 +760,29 @@ func schema_pkg_apis_solas_v1alpha1_MemberUsage(ref common.ReferenceCallback) co
 							},
 						},
 					},
+					"buckets": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Buckets are the token buckets of the rates, spec 15.2.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(v1alpha1.Bucket{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			v1alpha1.UsageEntry{}.OpenAPIModelName(), v1.ObjectMeta{}.OpenAPIModelName()},
+			v1alpha1.Bucket{}.OpenAPIModelName(), v1alpha1.UsageEntry{}.OpenAPIModelName(), v1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 

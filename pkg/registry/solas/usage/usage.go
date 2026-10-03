@@ -147,3 +147,82 @@ func (u *Store) Cleanup(ctx context.Context, devices storage.Interface, member s
 	}
 	return removed, nil
 }
+
+// The kinds of rate, spec 15.2.
+const (
+	Binds       = "binds"
+	Preemptions = "preemptions"
+)
+
+//= spec/solas.md#15-2-usage-set
+//# A bind or a preemption request over a rate MUST fail with
+//# `429 Too Many Requests`.
+
+// take takes one token from the bucket kind of mu, which holds perMinute
+// tokens and fills at perMinute a minute. It fails with 429 when the
+// bucket is empty, with the seconds until the next token.
+func take(mu *solas.MemberUsage, kind string, perMinute int32, now time.Time) error {
+	const one = 1000
+	capacity := int64(perMinute) * one
+	i := -1
+	for j := range mu.Buckets {
+		if mu.Buckets[j].Kind == kind {
+			i = j
+		}
+	}
+	if i < 0 {
+		mu.Buckets = append(mu.Buckets, solas.Bucket{Kind: kind, Tokens: capacity, Last: metav1.NewTime(now)})
+		i = len(mu.Buckets) - 1
+	}
+	b := &mu.Buckets[i]
+	if elapsed := now.Sub(b.Last.Time); elapsed > 0 {
+		b.Tokens = min(capacity, b.Tokens+int64(elapsed)*int64(perMinute)*one/int64(time.Minute))
+		b.Last = metav1.NewTime(now)
+	}
+	if b.Tokens < one || perMinute == 0 {
+		wait := 60
+		if perMinute > 0 {
+			wait = int((one - b.Tokens) * 60 / (int64(perMinute) * one))
+		}
+		return apierrors.NewTooManyRequests(fmt.Sprintf("member %s is over its rate of %d %s a minute", mu.Name, perMinute, kind), max(wait, 1))
+	}
+	b.Tokens -= one
+	return nil
+}
+
+// Admit admits a bind of device for member in one conditional write: it
+// takes a token of the bind rate when rate is set, then reserves the
+// device when max is set, spec 15.2.
+func (u *Store) Admit(ctx context.Context, member, device string, max, rate *int32) error {
+	now := u.now()
+	return u.update(ctx, member, func(mu *solas.MemberUsage) error {
+		if rate != nil {
+			if err := take(mu, Binds, *rate, now); err != nil {
+				return err
+			}
+		}
+		if max == nil {
+			return nil
+		}
+		for _, e := range mu.Entries {
+			if e.Device == device {
+				return nil
+			}
+		}
+		if int32(len(mu.Entries)) >= *max {
+			return apierrors.NewForbidden(solas.Resource("devices"), device,
+				fmt.Errorf("member %s holds or is binding %d devices, and its limit is %d", member, len(mu.Entries), *max))
+		}
+		mu.Entries = append(mu.Entries, solas.UsageEntry{Device: device, Added: metav1.NewTime(now)})
+		return nil
+	})
+}
+
+// TakePreemption takes a token of the preemption rate of member.
+func (u *Store) TakePreemption(ctx context.Context, member string, rate int32) error {
+	now := u.now()
+	return u.update(ctx, member, func(mu *solas.MemberUsage) error { return take(mu, Preemptions, rate, now) })
+}
+
+// WithClock returns u with another clock, for tests.
+func (u *Store) WithClock(now func() time.Time) *Store { return &Store{s: u.s, now: now} }

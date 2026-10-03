@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sstorage "k8s.io/apiserver/pkg/storage"
@@ -67,5 +68,39 @@ func testCleanup(t *testing.T, g apiserver.RESTOptionsGetter) {
 	entries, err := u.Entries(ctx, "a")
 	if err != nil || len(entries) != 1 || entries[0].Device != "d1" {
 		t.Errorf("entries after the cleanup = %+v, %v; want d1 only", entries, err)
+	}
+}
+
+//= spec/solas.md#15-2-usage-set
+//= type=test
+//# A bind or a preemption request over a rate MUST fail with
+//# `429 Too Many Requests`.
+
+// TestBindRate runs on each store: with bindsPerMinute 2, a burst of three
+// binds gets 429 on the third, and a token comes back after 30 seconds.
+func TestBindRate(t *testing.T) { teststore.Run(t, testBindRate) }
+
+func testBindRate(t *testing.T, g apiserver.RESTOptionsGetter) {
+	ctx := context.Background()
+	now := time.Unix(10000, 0)
+	u := usage.New(raw(t, g, "memberusages",
+		func() runtime.Object { return &solas.MemberUsage{} }, func() runtime.Object { return &solas.MemberUsageList{} })).
+		WithClock(func() time.Time { return now })
+	rate := int32(2)
+	for i, d := range []string{"d1", "d2"} {
+		if err := u.Admit(ctx, "a", d, nil, &rate); err != nil {
+			t.Fatalf("bind %d: %v", i+1, err)
+		}
+	}
+	err := u.Admit(ctx, "a", "d3", nil, &rate)
+	if !apierrors.IsTooManyRequests(err) {
+		t.Fatalf("third bind in a burst: err = %v, want 429", err)
+	}
+	if s, ok := apierrors.SuggestsClientDelay(err); !ok || s < 1 {
+		t.Errorf("429 suggests a delay of %d, %v; want at least 1 second", s, ok)
+	}
+	now = now.Add(30 * time.Second)
+	if err := u.Admit(ctx, "a", "d3", nil, &rate); err != nil {
+		t.Errorf("bind after 30 seconds: %v", err)
 	}
 }

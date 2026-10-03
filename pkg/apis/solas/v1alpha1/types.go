@@ -267,6 +267,9 @@ type MemberUsage struct {
 
 	// +listType=atomic
 	Entries []UsageEntry `json:"entries,omitempty"`
+	// Buckets are the token buckets of the rates, spec 15.2.
+	// +listType=atomic
+	Buckets []Bucket `json:"buckets,omitempty"`
 }
 
 // UsageEntry is one device in a usage set.
@@ -274,6 +277,15 @@ type UsageEntry struct {
 	Device string `json:"device"`
 	// Added is when the server added the entry, by its own clock.
 	Added metav1.Time `json:"added"`
+}
+
+// Bucket is a token bucket of one rate: binds or preemptions.
+type Bucket struct {
+	Kind string `json:"kind"`
+	// Tokens is the number of tokens left, in thousandths.
+	Tokens int64 `json:"tokens"`
+	// Last is when the bucket was last filled, by the server clock.
+	Last metav1.Time `json:"last"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
