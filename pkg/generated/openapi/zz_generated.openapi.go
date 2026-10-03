@@ -29,6 +29,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1alpha1.MemberSpec{}.OpenAPIModelName():          schema_pkg_apis_solas_v1alpha1_MemberSpec(ref),
 		v1alpha1.MemberStatus{}.OpenAPIModelName():        schema_pkg_apis_solas_v1alpha1_MemberStatus(ref),
 		v1alpha1.PreemptionRequest{}.OpenAPIModelName():   schema_pkg_apis_solas_v1alpha1_PreemptionRequest(ref),
+		v1alpha1.Release{}.OpenAPIModelName():             schema_pkg_apis_solas_v1alpha1_Release(ref),
+		v1alpha1.StoreFormat{}.OpenAPIModelName():         schema_pkg_apis_solas_v1alpha1_StoreFormat(ref),
+		v1alpha1.StoreFormatList{}.OpenAPIModelName():     schema_pkg_apis_solas_v1alpha1_StoreFormatList(ref),
 		resource.Quantity{}.OpenAPIModelName():            schema_apimachinery_pkg_api_resource_Quantity(ref),
 		v1.APIGroup{}.OpenAPIModelName():                  schema_pkg_apis_meta_v1_APIGroup(ref),
 		v1.APIGroupList{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_APIGroupList(ref),
@@ -294,6 +297,20 @@ func schema_pkg_apis_solas_v1alpha1_DeviceSpec(ref common.ReferenceCallback) com
 							Format:      "int32",
 						},
 					},
+					"reclaimPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReclaimPolicy decides when a sweeper may clear the claimRef of a member that is gone: Delete, Delay, or Retain. The default is Delete, spec 8.5.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"reclaimDelaySeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReclaimDelaySeconds is the reclaim time R of the Delay policy.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 			},
 		},
@@ -347,11 +364,17 @@ func schema_pkg_apis_solas_v1alpha1_DeviceStatus(ref common.ReferenceCallback) c
 							},
 						},
 					},
+					"lastRelease": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LastRelease records the last clear of claimRef: who did it, when, and which claim held the device, spec 8.5. The server sets it.",
+							Ref:         ref(v1alpha1.Release{}.OpenAPIModelName()),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			v1alpha1.ClaimRef{}.OpenAPIModelName(), v1alpha1.PreemptionRequest{}.OpenAPIModelName(), v1.Condition{}.OpenAPIModelName()},
+			v1alpha1.ClaimRef{}.OpenAPIModelName(), v1alpha1.PreemptionRequest{}.OpenAPIModelName(), v1alpha1.Release{}.OpenAPIModelName(), v1.Condition{}.OpenAPIModelName()},
 	}
 }
 
@@ -490,6 +513,20 @@ func schema_pkg_apis_solas_v1alpha1_MemberStatus(ref common.ReferenceCallback) c
 							Format:      "",
 						},
 					},
+					"minFormat": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MinFormat is the lowest format that the member supports, spec 11.4. A member with no range supports format 1 only.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"maxFormat": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxFormat is the highest format that the member supports.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 			},
 		},
@@ -524,6 +561,140 @@ func schema_pkg_apis_solas_v1alpha1_PreemptionRequest(ref common.ReferenceCallba
 		},
 		Dependencies: []string{
 			v1alpha1.ClaimRef{}.OpenAPIModelName(), v1.Time{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_solas_v1alpha1_Release(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Release records a clear of the claimRef of a device, spec 8.5.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"by": {
+						SchemaProps: spec.SchemaProps{
+							Description: "By is the user that made the request, as the API server saw it.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"at": {
+						SchemaProps: spec.SchemaProps{
+							Description: "At is the time of the clear, by the clock of the API server.",
+							Ref:         ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
+					"claim": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Claim is the claimRef that the clear removed.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(v1alpha1.ClaimRef{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"by", "at", "claim"},
+			},
+		},
+		Dependencies: []string{
+			v1alpha1.ClaimRef{}.OpenAPIModelName(), v1.Time{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_solas_v1alpha1_StoreFormat(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "StoreFormat holds the finalized format of the store, spec 11.1. The API does not serve it: solas finalize writes it at the storage level, and solas migrate copies it.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"finalized": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Finalized is the finalized format. Zero reads as 1.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"epoch": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Epoch is the epoch of the store, spec 13.1. A restore moves it up.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_solas_v1alpha1_StoreFormatList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "StoreFormatList is a list of store formats. A store holds at most one.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(v1alpha1.StoreFormat{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			v1alpha1.StoreFormat{}.OpenAPIModelName(), v1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 

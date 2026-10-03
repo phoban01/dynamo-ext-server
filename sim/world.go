@@ -29,6 +29,11 @@ type Config struct {
 	Lag float64
 	// Unconditional breaks the store on purpose, see fakekube.Options.
 	Unconditional bool
+	// NoLeave turns off the random graceful leave, for scenarios that need
+	// every member Active.
+	NoLeave bool
+	// NoPause turns off the random pause of a cluster.
+	NoPause bool
 }
 
 // DefaultConfig is the configuration of the gate.
@@ -61,6 +66,15 @@ type World struct {
 	// witness test.
 	sawPreempted bool
 	step         int
+	// finalized is the finalized format of the store, spec 11.1.
+	finalized int32
+	// sweptRetained is set when a sweep freed a retained device, spec 8.5.
+	sweptRetained error
+	// sawRetained is true once a sweep ran while a retained device named a
+	// gone member, for the reach test.
+	sawRetained bool
+	// outage makes every call to the shared store fail, spec 8.1.
+	outage bool
 }
 
 // gate is a device gatekeeper, spec 6.6.
@@ -77,20 +91,25 @@ type use struct {
 // NewWorld builds a run from a seed.
 func NewWorld(ctx context.Context, seed uint64, cfg Config) (*World, error) {
 	w := &World{
-		cfg:      cfg,
-		seed:     seed,
-		rng:      rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)),
-		shared:   newShared(cfg.Unconditional),
-		gates:    map[string]*gate{},
-		bindings: map[string]map[int64]string{},
+		cfg:       cfg,
+		seed:      seed,
+		rng:       rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)),
+		shared:    newShared(cfg.Unconditional),
+		gates:     map[string]*gate{},
+		finalized: 1,
+		bindings:  map[string]map[int64]string{},
 	}
 	for i := range cfg.Devices {
 		name := fmt.Sprintf("d%d", i+1)
 		dev := &solasv1alpha1.Device{ObjectMeta: metav1.ObjectMeta{Name: name}}
-		// The first device is preemptible with a short grace period.
+		// The first device is preemptible with a short grace period. The
+		// second is retained: no sweeper may free it, spec 8.5.
 		if i == 0 {
 			grace := int32(10)
 			dev.Spec.Preemptible, dev.Spec.PreemptionGracePeriodSeconds = true, &grace
+		}
+		if i == 1 {
+			dev.Spec.ReclaimPolicy = solasv1alpha1.ReclaimRetain
 		}
 		if err := w.shared.Create(ctx, dev); err != nil {
 			return nil, err
@@ -101,7 +120,9 @@ func NewWorld(ctx context.Context, seed uint64, cfg Config) (*World, error) {
 	for i := range cfg.Clusters {
 		// The clocks start far apart; solas does not depend on synced clocks.
 		start := time.Unix(int64(1_000_000*(i+1)), 0)
-		w.clusters = append(w.clusters, newCluster(fmt.Sprintf("c%d", i), w.shared, start, cfg.Settings, w.rng, cfg.Lag))
+		c := newCluster(fmt.Sprintf("c%d", i), w.shared, start, cfg.Settings, w.rng, cfg.Lag)
+		c.client.outage = &w.outage
+		w.clusters = append(w.clusters, c)
 	}
 	return w, nil
 }
@@ -143,6 +164,8 @@ func (w *World) Step(ctx context.Context) {
 	switch {
 	case roll < 20:
 		w.tick()
+	case c.down:
+		// A cluster whose release refused to start does nothing.
 	case c.paused:
 		// A paused cluster does nothing, except wake up now and then.
 		if roll < 25 {
@@ -158,7 +181,7 @@ func (w *World) Step(ctx context.Context) {
 			w.log("%s reconcile %s: %s", c.name, k.Name, errText(c.reconcile(ctx, k)))
 		}
 	case roll < 68:
-		w.log("%s sweep: %s", c.name, errText(c.sweeper.Run(ctx)))
+		w.sweep(ctx, c)
 	case roll < 71:
 		w.log("%s orphan sweep: %s", c.name, errText(c.orphans.Sweep(ctx)))
 	case roll < 81:
@@ -167,13 +190,13 @@ func (w *World) Step(ctx context.Context) {
 		w.createClaim(ctx, c)
 	case roll < 88:
 		w.deleteClaim(ctx, c)
-	case roll < 91:
+	case roll < 91 && !w.cfg.NoPause:
 		c.paused = true
 		w.log("%s pause", c.name)
 	case roll < 93:
 		c.restart()
 		w.log("%s restart", c.name)
-	case roll < 94:
+	case roll < 94 && !w.cfg.NoLeave:
 		w.leave(ctx, c)
 	}
 }

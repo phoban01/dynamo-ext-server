@@ -21,5 +21,10 @@ module no_margin {
     grace: 20,
     forceClear: false,
     noPreemptionWait: false,
+    version: Map("a" -> 1, "b" -> 2),
+    skipTokenVersion: 0,
+    readGap: 15,
+    reclaim: Map("d1" -> "Delete", "d2" -> "Delete"),
+    reclaimDelay: 0,
   }).* from "../solas"
 }

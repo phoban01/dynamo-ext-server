@@ -34,6 +34,14 @@ type DeviceSpec struct {
 	// after a preemption request. The default is 30.
 	// +optional
 	PreemptionGracePeriodSeconds *int32 `json:"preemptionGracePeriodSeconds,omitempty"`
+	// ReclaimPolicy decides when a sweeper may clear the claimRef of a
+	// member that is gone: Delete, Delay, or Retain. The default is Delete,
+	// spec 8.5.
+	// +optional
+	ReclaimPolicy ReclaimPolicy `json:"reclaimPolicy,omitempty"`
+	// ReclaimDelaySeconds is the reclaim time R of the Delay policy.
+	// +optional
+	ReclaimDelaySeconds *int32 `json:"reclaimDelaySeconds,omitempty"`
 }
 
 // DeviceStatus shows which claim holds the device.
@@ -54,6 +62,10 @@ type DeviceStatus struct {
 	// +listType=map
 	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	// LastRelease records the last clear of claimRef: who did it, when,
+	// and which claim held the device, spec 8.5. The server sets it.
+	// +optional
+	LastRelease *Release `json:"lastRelease,omitempty"`
 }
 
 // PreemptionRequest asks the holder to give up the device.
@@ -133,6 +145,13 @@ type MemberStatus struct {
 	// Phase is Active or Draining.
 	// +optional
 	Phase MemberPhase `json:"phase,omitempty"`
+	// MinFormat is the lowest format that the member supports, spec 11.4.
+	// A member with no range supports format 1 only.
+	// +optional
+	MinFormat int32 `json:"minFormat,omitempty"`
+	// MaxFormat is the highest format that the member supports.
+	// +optional
+	MaxFormat int32 `json:"maxFormat,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -143,4 +162,51 @@ type MemberList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []Member `json:"items"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// StoreFormat holds the finalized format of the store, spec 11.1. The API
+// does not serve it: solas finalize writes it at the storage level, and
+// solas migrate copies it.
+type StoreFormat struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Finalized is the finalized format. Zero reads as 1.
+	// +optional
+	Finalized int32 `json:"finalized,omitempty"`
+	// Epoch is the epoch of the store, spec 13.1. A restore moves it up.
+	// +optional
+	Epoch int64 `json:"epoch,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// StoreFormatList is a list of store formats. A store holds at most one.
+type StoreFormatList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []StoreFormat `json:"items"`
+}
+
+// ReclaimPolicy is the reclaim policy of a device, spec 8.5.
+type ReclaimPolicy string
+
+// The reclaim policies, ADR 0016.
+const (
+	ReclaimDelete ReclaimPolicy = "Delete"
+	ReclaimDelay  ReclaimPolicy = "Delay"
+	ReclaimRetain ReclaimPolicy = "Retain"
+)
+
+// Release records a clear of the claimRef of a device, spec 8.5.
+type Release struct {
+	// By is the user that made the request, as the API server saw it.
+	By string `json:"by"`
+	// At is the time of the clear, by the clock of the API server.
+	At metav1.Time `json:"at"`
+	// Claim is the claimRef that the clear removed.
+	Claim ClaimRef `json:"claim"`
 }
