@@ -111,6 +111,9 @@ Claude Code session, so heavy jobs must not overlap.
 - An operator limits each member in a MemberPolicy; the server reserves
   a place in the member's usage set before each bind
   ([docs/adr/0021-member-limits.md](docs/adr/0021-member-limits.md)).
+- Read and write scoping in the store (proposed): a shared device catalog
+  with minimal holder data, and a partition per member for its own objects
+  ([docs/adr/0022-read-scoping.md](docs/adr/0022-read-scoping.md)).
 
 ## Writing
 
