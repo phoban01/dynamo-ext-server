@@ -105,6 +105,9 @@ Claude Code session, so heavy jobs must not overlap.
 - A holder transfers a device to a named claim in one write, and a claim
   can name its device
   ([docs/adr/0019-transfer.md](docs/adr/0019-transfer.md)).
+- A rejoined member recovers a device that still names its old identity,
+  with a token raise
+  ([docs/adr/0020-lost-claim-recovery.md](docs/adr/0020-lost-claim-recovery.md)).
 
 ## Writing
 

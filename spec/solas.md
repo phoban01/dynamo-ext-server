@@ -434,7 +434,7 @@ When the member renews its lease, the controller MUST set each
 `Suspended` claim back to `Bound` if its device still names it.
 When the controller finds that its member UID changed, it MUST set each
 claim with the old `status.memberUID` to `Lost`.
-A `Lost` claim MUST NOT bind again.
+A `Lost` claim MUST NOT bind again, except by a recovery, section 14.5.
 A user deletes a `Lost` claim to free its finalizer.
 
 A claim is in effect while it is `Bound`, it has no deletion timestamp,
@@ -996,3 +996,15 @@ list, as it does for a preemption request, spec 10.9.
 A claim MAY name its device in `spec.deviceName`.
 A claim that names a device MUST bind only that device: against an offer
 that names the claim, or as a normal bind when the device is free.
+
+### 14.5. Recovery of a Lost claim
+
+A member that joined again with a new UID MAY recover a device whose
+`claimRef` names one of its `Lost` claims under an old member UID,
+ADR 0020.
+A recovery MUST be one status update that sets the `claimRef` to the
+member's current UID and raises `status.fencingToken`, spec 5.3 and 13.2.
+The server MUST reject a recovery unless the member name and the claim
+UID are the same, and no `Member` has the old member UID.
+After a recovery, the controller MUST set the claim back to `Bound`.
+A plain adopt MUST NOT take such a device, spec 6.3.

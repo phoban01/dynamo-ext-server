@@ -1070,6 +1070,51 @@ module solas {
     }
   }
 
+  // ---- Recovery of a Lost claim, spec 14.5 ----
+
+  // A member that joined again with a new UID takes back a device that
+  // still names one of its claims under its old, gone member UID. One
+  // conditional write moves claimRef to the new UID and raises the token,
+  // so the old identity is fenced. The device is never free.
+  action recoverWrite(k: str, d: str): bool = {
+    val c = CFG.owner.get(k)
+    val cl = s.clusters.get(c)
+    val dv = s.devices.get(d)
+    val old = refMuid(dv.ref)
+    val rv = s.devCounter + 1
+    all {
+      active(cl),
+      cl.uid != 0,
+      not(cl.draining),
+      localLive(c),
+      s.claims.get(k).exists,
+      s.claims.get(k).phase == "Lost",
+      names(dv.ref, k),
+      old != cl.uid,
+      not(liveUids(s.members).contains(old)),
+      s' = {
+        ...s,
+        devices: s.devices.set(d, { ...dv, rv: rv, ref: Held({ member: c, muid: cl.uid, claim: k, prio: CFG.priority.get(k) }),
+          token: dv.token + 1, offer: Free }),
+        devCounter: rv,
+        bindings: s.bindings.union(Set({ dev: d, token: dv.token + 1, claim: k })),
+      },
+    }
+  }
+
+  // The claim is in effect again once its device names it with the current
+  // member UID.
+  action recoverDone(k: str, d: str): bool = {
+    val cl = s.clusters.get(CFG.owner.get(k))
+    val cm = s.claims.get(k)
+    all {
+      active(cl),
+      cm.phase == "Lost",
+      namesWith(s.devices.get(d).ref, k, cl.uid),
+      s' = { ...s, claims: s.claims.set(k, { ...cm, phase: "Bound", dev: d, muid: cl.uid, token: s.devices.get(d).token }) },
+    }
+  }
+
   // ---- Invariants, spec 8.4 ----
 
   // A request always beats the holder of its device, spec 10.5.
@@ -1205,6 +1250,8 @@ module solas {
       withdrawOffer(k),
       transferDone(k),
       sweepClearOffer(c, d),
+      recoverWrite(k, d),
+      recoverDone(k, d),
     }
   }
 
@@ -1539,6 +1586,25 @@ module solas2 {
   run withdrawn = offered.then(withdrawOffer("a2"))
     .expect(effective("a2") and isFree(s.devices.get("d1").offer) and safety)
   run withdrawTest = withdrawn.then(bindOffer("b1", "d1").fail())
+
+  // a comes back with a new UID after b swept it, and a1 is Lost. d2 is
+  // retained, so it still names a1 under a's old UID. a recovers d2: the
+  // token goes up, and a1 is Bound again, spec 14.5.
+  run lostWithDevice =
+    retainedHeld
+      .then(recover("a"))
+      .then(join("a"))
+      .expect(s.claims.get("a1").phase == "Lost" and safety)
+
+  run recoveryTest =
+    lostWithDevice
+      .then(recoverWrite("a1", "d2"))
+      .then(recoverDone("a1", "d2"))
+      .expect(s.claims.get("a1").phase == "Bound" and effective("a1") and s.devices.get("d2").token == 2
+        and s.claims.get("a1").token == 2 and safety)
+
+  // A plain adopt cannot take d2, because it names the old member UID.
+  run recoveryNotByAdoptTest = lostWithDevice.then(adopt("a1", "d2").fail())
 }
 
 // solas2 with d2 under the Delay policy: the sweeper clears it only R = 20
