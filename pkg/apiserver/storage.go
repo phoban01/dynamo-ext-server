@@ -84,14 +84,7 @@ func (g RESTOptionsGetter) decorator() generic.StorageDecorator {
 		getAttrsFunc storage.AttrFunc,
 		triggerFuncs storage.IndexerFuncs,
 		indexers *cache.Indexers) (storage.Interface, factory.DestroyFunc, error) {
-		var raw storage.Interface
-		rawDestroy := func() {}
-		var err error
-		if len(g.EtcdServers) > 0 {
-			raw, rawDestroy, err = generic.NewRawStorage(config, newFunc, newListFunc, resourcePrefix)
-		} else {
-			raw, err = dynamo.New(g.Dynamo, config.Codec, newFunc, newListFunc, config.Prefix, resourcePrefix, config.GroupResource)
-		}
+		raw, rawDestroy, err := g.RawStorage(config, resourcePrefix, newFunc, newListFunc)
 		if err != nil {
 			return nil, func() {}, err
 		}
@@ -156,4 +149,15 @@ func (g RESTOptionsGetter) etcdOptions(resource schema.GroupResource) generic.RE
 		ResourcePrefix:          "/" + resource.Group + "/" + resource.Resource,
 		CountMetricPollPeriod:   time.Minute,
 	}
+}
+
+// RawStorage builds the store of a resource with no guard and no watch
+// cache. The decorator wraps it; tests use it to write below the guard.
+func (g RESTOptionsGetter) RawStorage(config *storagebackend.ConfigForResource, resourcePrefix string,
+	newFunc, newListFunc func() runtime.Object) (storage.Interface, factory.DestroyFunc, error) {
+	if len(g.EtcdServers) > 0 {
+		return generic.NewRawStorage(config, newFunc, newListFunc, resourcePrefix)
+	}
+	s, err := dynamo.New(g.Dynamo, config.Codec, newFunc, newListFunc, config.Prefix, resourcePrefix, config.GroupResource)
+	return s, func() {}, err
 }
