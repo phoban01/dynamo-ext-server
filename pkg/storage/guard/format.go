@@ -6,6 +6,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/phoban01/solas/pkg/format"
 )
 
 //= spec/solas.md#11-1-format-version
@@ -18,8 +20,8 @@ const FormatAnnotation = "solas.dev/format"
 // MinFormat and MaxFormat are the oldest and the newest format that this
 // release reads and writes, spec 11.1.
 const (
-	MinFormat = 1
-	MaxFormat = 1
+	MinFormat = format.Min
+	MaxFormat = format.Max
 )
 
 // formatOf returns the format of an object.
@@ -69,7 +71,7 @@ func checkFormat(obj runtime.Object) error {
 
 // stamp records the format of this write. Until finalization (spec 11.4)
 // exists, the finalized format and the maximum format are both 1.
-func stamp(obj runtime.Object, format int) error {
+func stamp(obj runtime.Object, f int) error {
 	m, err := meta.Accessor(obj)
 	if err != nil {
 		return err
@@ -78,7 +80,7 @@ func stamp(obj runtime.Object, format int) error {
 	if a == nil {
 		a = map[string]string{}
 	}
-	a[FormatAnnotation] = strconv.Itoa(format)
+	a[FormatAnnotation] = strconv.Itoa(f)
 	m.SetAnnotations(a)
 	return nil
 }

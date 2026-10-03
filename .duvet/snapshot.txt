@@ -483,8 +483,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MAY,test]: A server MAY read a newer object, on a best effort basis.
 
   SECTION: [11.4. Finalization](#11-4-finalization)
-    TEXT[!MUST]: Each member MUST report the lowest and the highest format that it
-    TEXT[!MUST]: supports in its `Member` status.
+    TEXT[!MUST,implementation,test]: Each member MUST report the lowest and the highest format that it
+    TEXT[!MUST,implementation,test]: supports in its `Member` status.
     TEXT[!MUST]: The finalized format MUST only move up.
     TEXT[!MUST]: The finalized format MUST move to a value only when every `Active`
     TEXT[!MUST]: member reports a highest format at or above that value.

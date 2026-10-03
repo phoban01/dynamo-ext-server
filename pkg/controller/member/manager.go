@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	solasv1alpha1 "github.com/phoban01/solas/pkg/apis/solas/v1alpha1"
+	"github.com/phoban01/solas/pkg/format"
 )
 
 // Status is the view the rest of the controller has of this member.
@@ -133,6 +134,7 @@ func (m *Manager) join(ctx context.Context) error {
 		//= spec/solas.md#7-2-join
 		//# If the renew succeeds, the controller MUST keep the UID of that `Member`.
 		mem.Status.RenewTime = ptrMicro(send)
+		reportFormats(&mem.Status)
 		if err := m.Client.Status().Update(ctx, &mem); err != nil {
 			return client.IgnoreNotFound(ignoreConflict(err))
 		}
@@ -153,6 +155,8 @@ func (m *Manager) join(ctx context.Context) error {
 			Status: solasv1alpha1.MemberStatus{
 				Phase:     solasv1alpha1.MemberActive,
 				RenewTime: ptrMicro(send),
+				MinFormat: format.Min,
+				MaxFormat: format.Max,
 			},
 		}
 		if err := m.Client.Create(ctx, &mem); err != nil {
@@ -195,6 +199,7 @@ func (m *Manager) renew(ctx context.Context) error {
 	}
 	send := m.Clock.Now()
 	mem.Status.RenewTime = ptrMicro(send)
+	reportFormats(&mem.Status)
 	err := m.Client.Status().Update(ctx, mem)
 	switch {
 	case err == nil:
@@ -309,4 +314,15 @@ func (m *Manager) markLost(ctx context.Context, uid types.UID) error {
 		return nil
 	}
 	return m.MarkLost(ctx, uid)
+}
+
+//= spec/solas.md#11-4-finalization
+//# Each member MUST report the lowest and the highest format that it
+//# supports in its `Member` status.
+
+// reportFormats sets the format range of this release. A member reports it
+// when it joins and with each renew, so an upgraded member updates its
+// range with its first renew.
+func reportFormats(st *solasv1alpha1.MemberStatus) {
+	st.MinFormat, st.MaxFormat = format.Min, format.Max
 }
