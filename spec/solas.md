@@ -918,3 +918,37 @@ UID, spec 7.2, and its claims go back to `Bound`.
 A cluster that switches later than `D` finds that the other members
 swept its `Member`, spec 8.
 It joins again, and its claims become `Lost`, spec 6.5.
+
+## 13. Restore
+
+A restore of the store from a backup puts back old fencing tokens and old
+resource versions, ADR 0018.
+
+### 13.1. Epoch
+
+The store MUST hold an epoch.
+The epoch of a store before its first restore is 0.
+After a restore, and before any server writes to the store, the restore
+tool MUST set an epoch above every epoch that the store had.
+The epoch in the backup can be old, so the tool MUST NOT only add 1 to
+it.
+The restore tool SHOULD use the time of the restore in Unix seconds, and
+at least the restored epoch plus 1.
+
+### 13.2. Fencing tokens
+
+A fencing token MUST hold the epoch of its bind in its high 32 bits.
+When a status update sets `claimRef` on a free device whose token is
+below `epoch * 2^32`, the server MUST set the token to `epoch * 2^32 + 1`.
+In every other bind, the token is the old value plus 1, spec 5.3.
+So a token compares as the pair (epoch, count), and a bind after a
+restore gets a token above every token issued before it.
+
+### 13.3. Resource versions
+
+After a restore, every resource version MUST be above every resource
+version issued before the restore.
+On the DynamoDB store, the restore tool MUST raise each counter item to
+at least `epoch * 2^32`.
+On the etcd store, the operator MUST restore with
+`etcdutl snapshot restore --bump-revision` and `--mark-compacted`.

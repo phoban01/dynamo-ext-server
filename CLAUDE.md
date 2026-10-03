@@ -99,6 +99,9 @@ Claude Code session, so heavy jobs must not overlap.
 - A gatekeeper in front of each actuator checks fencing tokens against
   the store (proposed; MAAS designed, OCN open)
   ([docs/adr/0017-actuator-gatekeepers.md](docs/adr/0017-actuator-gatekeepers.md)).
+- A restore moves the store to a new epoch, which tokens and resource
+  versions carry, so they never go back
+  ([docs/adr/0018-restore-epoch.md](docs/adr/0018-restore-epoch.md)).
 
 ## Writing
 

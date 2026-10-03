@@ -565,3 +565,25 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!SHOULD]: seal.
     TEXT[test]: On the destination, the member renews its `Member`, which has the same
     TEXT[test]: UID, spec 7.2, and its claims go back to `Bound`.
+
+  SECTION: [13.1. Epoch](#13-1-epoch)
+    TEXT[!MUST]: The store MUST hold an epoch.
+    TEXT[!MUST]: After a restore, and before any server writes to the store, the restore
+    TEXT[!MUST]: tool MUST set an epoch above every epoch that the store had.
+    TEXT[!MUST]: The epoch in the backup can be old, so the tool MUST NOT only add 1 to
+    TEXT[!MUST]: it.
+    TEXT[!SHOULD]: The restore tool SHOULD use the time of the restore in Unix seconds, and
+    TEXT[!SHOULD]: at least the restored epoch plus 1.
+
+  SECTION: [13.2. Fencing tokens](#13-2-fencing-tokens)
+    TEXT[!MUST]: A fencing token MUST hold the epoch of its bind in its high 32 bits.
+    TEXT[!MUST]: When a status update sets `claimRef` on a free device whose token is
+    TEXT[!MUST]: below `epoch * 2^32`, the server MUST set the token to `epoch * 2^32 + 1`.
+
+  SECTION: [13.3. Resource versions](#13-3-resource-versions)
+    TEXT[!MUST]: After a restore, every resource version MUST be above every resource
+    TEXT[!MUST]: version issued before the restore.
+    TEXT[!MUST]: On the DynamoDB store, the restore tool MUST raise each counter item to
+    TEXT[!MUST]: at least `epoch * 2^32`.
+    TEXT[!MUST]: On the etcd store, the operator MUST restore with
+    TEXT[!MUST]: `etcdutl snapshot restore --bump-revision` and `--mark-compacted`.
