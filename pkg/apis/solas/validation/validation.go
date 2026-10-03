@@ -46,10 +46,16 @@ func ValidateDeviceStatusUpdate(d, old *solas.Device) field.ErrorList {
 	//= spec/solas.md#5-3-status-updates
 	//# To move a device, a client MUST first clear `claimRef` and then set it
 	//# in a second update.
-	if old.Status.ClaimRef != nil && d.Status.ClaimRef != nil && !SameClaim(old.Status.ClaimRef, d.Status.ClaimRef) {
+
+	//= spec/solas.md#14-2-bind-against-the-offer
+	//# Only the claim that the offer names, with the member UID that it names,
+	//# MAY bind against the offer.
+	if old.Status.ClaimRef != nil && d.Status.ClaimRef != nil && !SameClaim(old.Status.ClaimRef, d.Status.ClaimRef) &&
+		!IsTransferBind(d, old) {
 		errs = append(errs, field.Forbidden(path,
 			"cannot change the holder of a bound device; clear claimRef first, then set it"))
 	}
+	errs = append(errs, validateOffer(d, old)...)
 	return append(errs, validatePreemption(d, old)...)
 }
 
@@ -133,6 +139,10 @@ func validatePreemption(d, old *solas.Device) field.ErrorList {
 			errs = append(errs, field.Forbidden(path, "the device is not preemptible"))
 		case old.Status.ClaimRef == nil:
 			errs = append(errs, field.Forbidden(path, "the device is free; bind it instead"))
+		//= spec/solas.md#14-1-offer
+		//# The server MUST reject a preemption request while an offer stands.
+		case old.Status.Offer != nil:
+			errs = append(errs, field.Forbidden(path, "the holder offers the device to another claim"))
 		//= spec/solas.md#10-10-protected-holders
 		//# The server MUST reject a preemption request on a device whose holder is
 		//# protected.
@@ -229,4 +239,39 @@ func validateParameters(p *runtime.RawExtension, path *field.Path) field.ErrorLi
 		return field.ErrorList{field.TooLong(path, len(p.Raw), MaxParameters)}
 	}
 	return nil
+}
+
+// IsTransferBind reports whether an update from old to d is a bind
+// against the offer of old: claimRef moves from the holder to exactly the
+// claim and member UID that the offer names, spec 14.2.
+func IsTransferBind(d, old *solas.Device) bool {
+	return old.Status.ClaimRef != nil && old.Status.Offer != nil && d.Status.ClaimRef != nil &&
+		SameIdentity(d.Status.ClaimRef, old.Status.Offer)
+}
+
+// validateOffer checks the offer rules of spec 14.1.
+func validateOffer(d, old *solas.Device) field.ErrorList {
+	path := statusPath.Child("offer")
+	offer, oldOffer := d.Status.Offer, old.Status.Offer
+	if offer == nil || (oldOffer != nil && SameClaim(offer, oldOffer)) {
+		return nil
+	}
+	errs := validateClaimRef(offer, path)
+	switch {
+	//= spec/solas.md#14-1-offer
+	//# The server MUST reject an offer on a free device, and a second offer
+	//# while one stands.
+	case old.Status.ClaimRef == nil:
+		errs = append(errs, field.Forbidden(path, "the device is free; bind it instead"))
+	case oldOffer != nil:
+		errs = append(errs, field.Forbidden(path, fmt.Sprintf("the device is offered to claim %s/%s of member %s; withdraw that offer first",
+			oldOffer.Namespace, oldOffer.Name, oldOffer.Member)))
+	//= spec/solas.md#14-1-offer
+	//# The server MUST reject an offer while a preemption request stands.
+	case old.Status.Preemption != nil:
+		errs = append(errs, field.Forbidden(path, "a preemption request stands"))
+	case SameIdentity(offer, old.Status.ClaimRef):
+		errs = append(errs, field.Forbidden(path, "the offer names the holder"))
+	}
+	return errs
 }

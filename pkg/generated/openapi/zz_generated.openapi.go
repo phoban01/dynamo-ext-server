@@ -402,6 +402,12 @@ func schema_pkg_apis_solas_v1alpha1_DeviceStatus(ref common.ReferenceCallback) c
 							Ref:         ref(v1alpha1.PreemptionRequest{}.OpenAPIModelName()),
 						},
 					},
+					"offer": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Offer names the claim that the holder hands the device to. Only that claim may bind against it, spec 14.",
+							Ref:         ref(v1alpha1.ClaimRef{}.OpenAPIModelName()),
+						},
+					},
 					"conditions": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{

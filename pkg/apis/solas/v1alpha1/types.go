@@ -62,6 +62,10 @@ type DeviceStatus struct {
 	// Preemption is a request of a claim of higher priority.
 	// +optional
 	Preemption *PreemptionRequest `json:"preemption,omitempty"`
+	// Offer names the claim that the holder hands the device to. Only that
+	// claim may bind against it, spec 14.
+	// +optional
+	Offer *ClaimRef `json:"offer,omitempty"`
 	// Conditions hold the health of the device. The party that runs the
 	// device sets them.
 	// +optional

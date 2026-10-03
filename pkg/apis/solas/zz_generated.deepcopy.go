@@ -161,6 +161,11 @@ func (in *DeviceStatus) DeepCopyInto(out *DeviceStatus) {
 		*out = new(PreemptionRequest)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Offer != nil {
+		in, out := &in.Offer, &out.Offer
+		*out = new(ClaimRef)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
 		*out = make([]v1.Condition, len(*in))

@@ -162,7 +162,8 @@ func (r *StatusREST) Update(ctx context.Context, name string, objInfo rest.Updat
 		return update()
 	}
 	oldRef, newRef := old.Status.ClaimRef, next.(*solas.Device).Status.ClaimRef
-	if oldRef == nil && newRef != nil {
+	// A bind of a free device, or a bind against an offer from another member.
+	if newRef != nil && (oldRef == nil || oldRef.Member != newRef.Member) {
 		p, err := r.policies(ctx, newRef.Member)
 		if err != nil {
 			return nil, false, err
@@ -191,7 +192,7 @@ func (r *StatusREST) Update(ctx context.Context, name string, objInfo rest.Updat
 		}
 	}
 	out, created, err := update()
-	if err == nil && oldRef != nil && newRef == nil {
+	if err == nil && oldRef != nil && (newRef == nil || newRef.Member != oldRef.Member) {
 		// A failure here leaves the entry for the cleanup.
 		_ = r.usage.Remove(ctx, oldRef.Member, name)
 	}

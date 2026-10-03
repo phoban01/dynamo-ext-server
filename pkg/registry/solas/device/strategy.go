@@ -115,6 +115,17 @@ func (statusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obj
 		validation.SameIdentity(d.Status.ClaimRef, &req.Claim) {
 		d.Status.Preemption = nil
 	}
+	//= spec/solas.md#14-2-bind-against-the-offer
+	//# The bind MUST be one status update that sets `claimRef` to the named
+	//# claim, sets `status.fencingToken` to the next token, spec 5.3 and 13.2,
+	//# and clears `status.offer`.
+
+	//= spec/solas.md#14-1-offer
+	//# When a status update clears `claimRef`, the server MUST clear
+	//# `status.offer`.
+	if (o.Status.ClaimRef != nil && d.Status.ClaimRef == nil) || validation.IsTransferBind(d, o) {
+		d.Status.Offer = nil
+	}
 }
 
 //= spec/solas.md#5-3-status-updates
@@ -130,7 +141,7 @@ func (statusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obj
 // nextToken returns the fencing token that the server stores for a status
 // update from old to d.
 func nextToken(old, d *solas.Device) int64 {
-	if old.Status.ClaimRef == nil && d.Status.ClaimRef != nil {
+	if (old.Status.ClaimRef == nil && d.Status.ClaimRef != nil) || validation.IsTransferBind(d, old) {
 		return format.NextToken(old.Status.FencingToken, format.Epoch())
 	}
 	return old.Status.FencingToken

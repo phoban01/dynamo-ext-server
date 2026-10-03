@@ -48,6 +48,8 @@ type DeviceStatus struct {
 	FencingToken int64
 	// Preemption is a request of a claim of higher priority, spec 10.5.
 	Preemption *PreemptionRequest
+	// Offer names the claim that the holder hands the device to, spec 14.1.
+	Offer *ClaimRef
 	// Conditions hold the health of the device, spec 10.1.
 	Conditions []metav1.Condition
 	// LastRelease records the last clear of claimRef: who did it, when,

@@ -986,8 +986,12 @@ the offer exists.
 The offer MUST be a status update of the device that sets
 `status.offer` to the named claim, its member, and its member UID.
 The offer MUST carry the resource version that the controller read.
-The server MUST reject an offer while a preemption request stands, and a
-second offer while one stands.
+The server MUST reject an offer on a free device, and a second offer
+while one stands.
+The server MUST reject an offer while a preemption request stands.
+The server MUST reject a preemption request while an offer stands.
+When a status update clears `claimRef`, the server MUST clear
+`status.offer`.
 
 ### 14.2. Bind against the offer
 
