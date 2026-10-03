@@ -457,6 +457,12 @@ The device MUST accept a use with a token equal to or higher than the
 highest token that it has accepted, and record that token as the highest.
 A device that cannot check tokens MUST sit behind a gatekeeper that
 checks them.
+Fencing protects a device only when every change of the device passes a
+token check.
+Until a gatekeeper exists for an actuator, fencing does not protect the
+devices that the actuator drives.
+A gatekeeper MAY use the `fencingToken` of the device in the store as
+the highest token, because it only goes up, ADR 0017.
 
 A bind gives the device a higher token, spec 5.3.
 So once the new holder has used the device, the device rejects the old

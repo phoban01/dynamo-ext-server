@@ -274,6 +274,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation,test]: highest token that it has accepted, and record that token as the highest.
     TEXT[!MUST,implementation]: A device that cannot check tokens MUST sit behind a gatekeeper that
     TEXT[!MUST,implementation]: checks them.
+    TEXT[!MAY]: A gatekeeper MAY use the `fencingToken` of the device in the store as
+    TEXT[!MAY]: the highest token, because it only goes up, ADR 0017.
 
   SECTION: [7.1. Resource](#7-1-resource)
     TEXT[!MUST,implementation]: `Member` MUST be a cluster-scoped resource in the group `solas.dev`,
