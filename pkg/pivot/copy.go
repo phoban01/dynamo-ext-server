@@ -130,9 +130,10 @@ func (p *Pivot) upsert(ctx context.Context, o *unstructured.Unstructured) (outco
 	//= spec/solas.md#9-2-copy
 	//# The copy MUST update the Device when its `solas.dev/pivoted-from` names
 	//# the old object.
-	// Only the description comes from the old object; keep the rest of the
-	// spec, such as attributes set in solas.
+	// Only the description and the parameters come from the old object;
+	// keep the rest of the spec, such as attributes set in solas.
 	cur.Labels, cur.Annotations, cur.Spec.Description = want.Labels, want.Annotations, want.Spec.Description
+	cur.Spec.Parameters = want.Spec.Parameters
 	if !p.DryRun {
 		if err := p.Solas.Update(ctx, &cur); err != nil {
 			return 0, fmt.Errorf("update device %s: %w", cur.Name, err)
@@ -188,6 +189,9 @@ func (p *Pivot) Verify(ctx context.Context) ([]string, error) {
 		//= spec/solas.md#9-3-verify
 		//# It MUST check that the Device names the old object, and that the labels
 		//# and the description match.
+
+		//= spec/solas.md#9-3-verify
+		//# It MUST check that `spec.parameters` holds the `spec` of the old object.
 		switch {
 		case cur.Annotations[AnnotationPivotedFrom] != want.Annotations[AnnotationPivotedFrom]:
 			problems = append(problems, fmt.Sprintf("%s: Device names %q, not this object", o.GetName(), cur.Annotations[AnnotationPivotedFrom]))
@@ -195,6 +199,8 @@ func (p *Pivot) Verify(ctx context.Context) ([]string, error) {
 			problems = append(problems, fmt.Sprintf("%s: labels differ", o.GetName()))
 		case cur.Spec.Description != want.Spec.Description:
 			problems = append(problems, fmt.Sprintf("%s: description differs", o.GetName()))
+		case !SameParameters(cur.Spec.Parameters, want.Spec.Parameters):
+			problems = append(problems, fmt.Sprintf("%s: parameters differ", o.GetName()))
 		}
 	}
 	return problems, nil
@@ -203,5 +209,6 @@ func (p *Pivot) Verify(ctx context.Context) ([]string, error) {
 func same(cur, want *solasv1alpha1.Device) bool {
 	return maps.Equal(cur.Labels, want.Labels) &&
 		maps.Equal(cur.Annotations, want.Annotations) &&
-		cur.Spec.Description == want.Spec.Description
+		cur.Spec.Description == want.Spec.Description &&
+		SameParameters(cur.Spec.Parameters, want.Spec.Parameters)
 }

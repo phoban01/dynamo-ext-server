@@ -674,6 +674,8 @@ The Device MUST get the annotations of the old object, except
 The Device MUST get its description from a field of the old object that
 the pivot names.
 The pivot MUST NOT copy the status of the old object.
+The Device MUST get the whole `spec` of the old object in
+`spec.parameters`, so that no field of the old object is lost.
 A pivoted device starts free.
 The Device MUST have the annotation `solas.dev/pivoted-from`, set to the
 group, the resource, the namespace, and the name of the old object.
@@ -698,6 +700,7 @@ With `--dry-run`, the copy MUST NOT write.
 The verify MUST check that each old object has a Device.
 It MUST check that the Device names the old object, and that the labels
 and the description match.
+It MUST check that `spec.parameters` holds the `spec` of the old object.
 It MUST exit with a status other than 0 when any check fails.
 
 ### 9.4. Webhook
