@@ -108,6 +108,9 @@ Claude Code session, so heavy jobs must not overlap.
 - A rejoined member recovers a device that still names its old identity,
   with a token raise
   ([docs/adr/0020-lost-claim-recovery.md](docs/adr/0020-lost-claim-recovery.md)).
+- An operator limits each member in a MemberPolicy; the server reserves
+  a place in the member's usage set before each bind
+  ([docs/adr/0021-member-limits.md](docs/adr/0021-member-limits.md)).
 
 ## Writing
 
