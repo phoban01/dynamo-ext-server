@@ -334,6 +334,12 @@ func schema_pkg_apis_solas_v1alpha1_DeviceSpec(ref common.ReferenceCallback) com
 							},
 						},
 					},
+					"parameters": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Parameters holds any JSON that the owner of the device needs. The server stores it as written and never reads inside it, spec 5.1.",
+							Ref:         ref(runtime.RawExtension{}.OpenAPIModelName()),
+						},
+					},
 					"preemptible": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Preemptible lets a claim of higher priority take the device.",
@@ -365,6 +371,8 @@ func schema_pkg_apis_solas_v1alpha1_DeviceSpec(ref common.ReferenceCallback) com
 				},
 			},
 		},
+		Dependencies: []string{
+			runtime.RawExtension{}.OpenAPIModelName()},
 	}
 }
 

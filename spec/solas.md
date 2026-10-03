@@ -293,6 +293,11 @@ The solas API server MUST serve `Device` from the table.
 `Device` MUST have a `status` subresource.
 Claims select devices by their labels.
 `Device.spec.description` holds free text that describes the device.
+`spec.parameters` MAY hold any JSON that the owner of the device needs.
+The server MUST store `spec.parameters` as written, and MUST reject it
+when it is larger than 64 KiB.
+The server never reads inside it, so its shape can change without a
+release of solas.
 
 ### 5.2. Claim reference
 

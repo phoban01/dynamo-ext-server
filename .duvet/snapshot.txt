@@ -160,6 +160,9 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: version `v1alpha1`.
     TEXT[!MUST,implementation]: The solas API server MUST serve `Device` from the table.
     TEXT[!MUST,implementation]: `Device` MUST have a `status` subresource.
+    TEXT[!MAY]: `spec.parameters` MAY hold any JSON that the owner of the device needs.
+    TEXT[!MUST,implementation,test]: The server MUST store `spec.parameters` as written, and MUST reject it
+    TEXT[!MUST,implementation,test]: when it is larger than 64 KiB.
 
   SECTION: [5.2. Claim reference](#5-2-claim-reference)
     TEXT[!MUST,implementation]: A `claimRef` MUST hold the member name, the member UID, the claim

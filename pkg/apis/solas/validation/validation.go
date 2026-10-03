@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	genericvalidation "k8s.io/apimachinery/pkg/api/validation"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	"github.com/phoban01/solas/pkg/apis/solas"
@@ -20,6 +21,7 @@ var (
 func ValidateDevice(d *solas.Device) field.ErrorList {
 	errs := genericvalidation.ValidateObjectMeta(&d.ObjectMeta, false, genericvalidation.NameIsDNSSubdomain, metaPath)
 	errs = append(errs, validateReclaim(&d.Spec, field.NewPath("spec"))...)
+	errs = append(errs, validateParameters(d.Spec.Parameters, field.NewPath("spec", "parameters"))...)
 	return append(errs, validateClaimRef(d.Status.ClaimRef, statusPath.Child("claimRef"))...)
 }
 
@@ -211,4 +213,20 @@ func ValidateMemberPolicy(p *solas.MemberPolicy) field.ErrorList {
 		}
 	}
 	return errs
+}
+
+// MaxParameters is the largest spec.parameters in bytes. A DynamoDB item
+// holds at most 400 KB, and an event item holds the object and the
+// previous object.
+const MaxParameters = 64 * 1024
+
+//= spec/solas.md#5-1-resource
+//# The server MUST store `spec.parameters` as written, and MUST reject it
+//# when it is larger than 64 KiB.
+
+func validateParameters(p *runtime.RawExtension, path *field.Path) field.ErrorList {
+	if p != nil && len(p.Raw) > MaxParameters {
+		return field.ErrorList{field.TooLong(path, len(p.Raw), MaxParameters)}
+	}
+	return nil
 }
