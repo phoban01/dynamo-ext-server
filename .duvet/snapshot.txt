@@ -264,8 +264,7 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: `Suspended` claim back to `Bound` if its device still names it.
     TEXT[!MUST,implementation,test]: When the controller finds that its member UID changed, it MUST set each
     TEXT[!MUST,implementation,test]: claim with the old `status.memberUID` to `Lost`.
-    TEXT[!MUST,implementation]: A `Lost` claim MUST NOT bind again,
-    TEXT[!MUST]:  except by a recovery, section 14.5.
+    TEXT[!MUST,implementation]: A `Lost` claim MUST NOT bind again, except by a recovery, section 14.5.
     TEXT[!MUST,implementation]: Workloads MUST use a device only while its claim is in effect.
 
   SECTION: [6.6. Device use](#6-6-device-use)
@@ -639,14 +638,14 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation,test]: that names the claim, or as a normal bind when the device is free.
 
   SECTION: [14.5. Recovery of a Lost claim](#14-5-recovery-of-a-lost-claim)
-    TEXT[!MAY]: A member that joined again with a new UID MAY recover a device whose
-    TEXT[!MAY]: `claimRef` names one of its `Lost` claims under an old member UID,
-    TEXT[!MAY]: ADR 0020.
-    TEXT[!MUST]: A recovery MUST be one status update that sets the `claimRef` to the
-    TEXT[!MUST]: member's current UID and raises `status.fencingToken`, spec 5.3 and 13.2.
-    TEXT[!MUST]: The server MUST reject a recovery unless the member name and the claim
-    TEXT[!MUST]: UID are the same, and no `Member` has the old member UID.
-    TEXT[!MUST]: After a recovery, the controller MUST set the claim back to `Bound`.
+    TEXT[!MAY,implementation]: A member that joined again with a new UID MAY recover a device whose
+    TEXT[!MAY,implementation]: `claimRef` names one of its `Lost` claims under an old member UID,
+    TEXT[!MAY,implementation]: ADR 0020.
+    TEXT[!MUST,implementation,test]: A recovery MUST be one status update that sets the `claimRef` to the
+    TEXT[!MUST,implementation,test]: member's current UID and raises `status.fencingToken`, spec 5.3 and 13.2.
+    TEXT[!MUST,implementation,test]: The server MUST reject a recovery unless the member name and the claim
+    TEXT[!MUST,implementation,test]: UID are the same, and no `Member` has the old member UID.
+    TEXT[!MUST,implementation,test]: After a recovery, the controller MUST set the claim back to `Bound`.
     TEXT[!MUST]: A plain adopt MUST NOT take such a device, spec 6.3.
 
   SECTION: [15. Limits](#15-limits)

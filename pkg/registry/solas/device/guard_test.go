@@ -52,3 +52,34 @@ func TestTransitionOffer(t *testing.T) {
 		}
 	}
 }
+
+// TestTransitionRecovery checks the shape and the token of a recovery in
+// the storage guard, spec 14.5.
+func TestTransitionRecovery(t *testing.T) {
+	held := dev("x", ref1)
+	held.Status.FencingToken = 4
+	rec := held.DeepCopy()
+	newRef := *ref1
+	newRef.MemberUID = "mu-new"
+	rec.Status.ClaimRef, rec.Status.FencingToken = &newRef, 5
+	noRaise := rec.DeepCopy()
+	noRaise.Status.FencingToken = 4
+	otherName := rec.DeepCopy()
+	otherName.Status.ClaimRef.Member = "b"
+	otherClaim := rec.DeepCopy()
+	otherClaim.Status.ClaimRef.UID = "u9"
+	for _, c := range []struct {
+		name string
+		new  *solas.Device
+		ok   bool
+	}{
+		{"recovery", rec, true},
+		{"recovery with the old token", noRaise, false},
+		{"another member name", otherName, false},
+		{"another claim", otherClaim, false},
+	} {
+		if err := Transition(held, c.new); (err == nil) != c.ok {
+			t.Errorf("%s: err = %v, want ok %v", c.name, err, c.ok)
+		}
+	}
+}

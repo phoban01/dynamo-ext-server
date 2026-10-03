@@ -31,12 +31,18 @@ type strategy struct {
 // none, spec 15.1.
 type PolicyLookup func(ctx context.Context, member string) (*solas.MemberPolicy, error)
 
+// MemberLookup returns the Member with a name, or nil when there is none.
+type MemberLookup func(ctx context.Context, name string) (*solas.Member, error)
+
 // statusStrategy handles updates of the status subresource.
 type statusStrategy struct {
 	strategy
 	// policies finds the MemberPolicy of a member. Nil means that no
 	// member has one.
 	policies PolicyLookup
+	// members finds a Member by name. Nil means that the server rejects
+	// every recovery.
+	members MemberLookup
 }
 
 // NewStrategy returns the strategy for devices.
@@ -141,7 +147,7 @@ func (statusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obj
 // nextToken returns the fencing token that the server stores for a status
 // update from old to d.
 func nextToken(old, d *solas.Device) int64 {
-	if (old.Status.ClaimRef == nil && d.Status.ClaimRef != nil) || validation.IsTransferBind(d, old) {
+	if (old.Status.ClaimRef == nil && d.Status.ClaimRef != nil) || validation.IsTransferBind(d, old) || validation.IsRecovery(d, old) {
 		return format.NextToken(old.Status.FencingToken, format.Epoch())
 	}
 	return old.Status.FencingToken
@@ -149,7 +155,9 @@ func nextToken(old, d *solas.Device) int64 {
 
 func (s statusStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
 	d, o := obj.(*solas.Device), old.(*solas.Device)
-	errs := validation.ValidateDeviceStatusUpdate(d, o)
+	recErrs := s.validateRecovery(ctx, d, o)
+	errs := validation.ValidateDeviceStatusUpdateWith(d, o, len(recErrs) == 0)
+	errs = append(errs, recErrs...)
 	return append(errs, s.validateProtected(ctx, d, o)...)
 }
 
@@ -223,4 +231,38 @@ func (s statusStrategy) validateProtected(ctx context.Context, d, old *solas.Dev
 	}
 	return field.ErrorList{field.Forbidden(field.NewPath("status", "claimRef", "protected"),
 		fmt.Sprintf("member %s may not protect its claims; an operator sets allowProtected in its MemberPolicy", ref.Member))}
+}
+
+// WithMembers returns the strategy with a lookup of members, which a
+// recovery needs, spec 14.5.
+func (s statusStrategy) WithMembers(members MemberLookup) statusStrategy {
+	s.members = members
+	return s
+}
+
+//= spec/solas.md#14-5-recovery-of-a-lost-claim
+//# The server MUST reject a recovery unless the member name and the claim
+//# UID are the same, and no `Member` has the old member UID.
+
+// validateRecovery checks that the old member UID of a recovery is gone:
+// the Member with the name of the ref has the new UID. Member names are
+// unique and UIDs are never reused, so no Member has the old UID.
+func (s statusStrategy) validateRecovery(ctx context.Context, d, old *solas.Device) field.ErrorList {
+	if !validation.IsRecovery(d, old) {
+		return nil
+	}
+	path := field.NewPath("status", "claimRef", "memberUID")
+	ref := d.Status.ClaimRef
+	if s.members == nil {
+		return field.ErrorList{field.Forbidden(path, "this server cannot check members, so it cannot accept a recovery")}
+	}
+	m, err := s.members(ctx, ref.Member)
+	if err != nil {
+		return field.ErrorList{field.InternalError(path, err)}
+	}
+	if m == nil || m.UID != ref.MemberUID {
+		return field.ErrorList{field.Forbidden(path,
+			fmt.Sprintf("a recovery must name the current UID of member %s", ref.Member))}
+	}
+	return nil
 }

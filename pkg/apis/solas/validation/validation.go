@@ -33,6 +33,13 @@ func ValidateDeviceUpdate(d, old *solas.Device) field.ErrorList {
 
 // ValidateDeviceStatusUpdate checks an update of the status of a device.
 func ValidateDeviceStatusUpdate(d, old *solas.Device) field.ErrorList {
+	return ValidateDeviceStatusUpdateWith(d, old, false)
+}
+
+// ValidateDeviceStatusUpdateWith checks an update of the status of a device.
+// With recoveryChecked, it accepts a recovery, spec 14.5: the caller has
+// checked that the old member UID is gone.
+func ValidateDeviceStatusUpdateWith(d, old *solas.Device, recoveryChecked bool) field.ErrorList {
 	errs := genericvalidation.ValidateObjectMetaUpdate(&d.ObjectMeta, &old.ObjectMeta, metaPath)
 	path := statusPath.Child("claimRef")
 	errs = append(errs, validateClaimRef(d.Status.ClaimRef, path)...)
@@ -51,7 +58,7 @@ func ValidateDeviceStatusUpdate(d, old *solas.Device) field.ErrorList {
 	//# Only the claim that the offer names, with the member UID that it names,
 	//# MAY bind against the offer.
 	if old.Status.ClaimRef != nil && d.Status.ClaimRef != nil && !SameClaim(old.Status.ClaimRef, d.Status.ClaimRef) &&
-		!IsTransferBind(d, old) {
+		!IsTransferBind(d, old) && !(recoveryChecked && IsRecovery(d, old)) {
 		errs = append(errs, field.Forbidden(path,
 			"cannot change the holder of a bound device; clear claimRef first, then set it"))
 	}
@@ -274,4 +281,14 @@ func validateOffer(d, old *solas.Device) field.ErrorList {
 		errs = append(errs, field.Forbidden(path, "the offer names the holder"))
 	}
 	return errs
+}
+
+// IsRecovery reports whether an update from old to d has the shape of a
+// recovery: claimRef keeps the member name and the claim, and moves to
+// another member UID, spec 14.5. The status strategy also checks that the
+// old member UID is gone.
+func IsRecovery(d, old *solas.Device) bool {
+	o, n := old.Status.ClaimRef, d.Status.ClaimRef
+	return o != nil && n != nil && o.Member == n.Member && o.Namespace == n.Namespace &&
+		o.Name == n.Name && o.UID == n.UID && o.MemberUID != n.MemberUID
 }

@@ -90,8 +90,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{Requeue: true}, ignoreConflict(r.Client.Status().Update(ctx, &claim))
 	case claimsv1alpha1.ClaimLost:
 		//= spec/solas.md#6-5-phases
-		//# A `Lost` claim MUST NOT bind again.
-		return reconcile.Result{}, nil
+		//# A `Lost` claim MUST NOT bind again, except by a recovery, section 14.5.
+		return r.recover(ctx, &claim, st)
 	case claimsv1alpha1.ClaimPending:
 		return r.bind(ctx, &claim, st)
 	default:

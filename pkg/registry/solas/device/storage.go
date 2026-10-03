@@ -44,7 +44,9 @@ type Usage interface {
 // need: the lookup of member policies and the usage sets.
 type Options struct {
 	Policies PolicyLookup
-	Usage    Usage
+	// Members finds a Member by name, for a recovery, spec 14.5.
+	Members MemberLookup
+	Usage   Usage
 }
 
 // NewRESTWithPolicies returns the stores of devices with a lookup of
@@ -82,7 +84,7 @@ func NewRESTWithOptions(scheme *runtime.Scheme, optsGetter generic.RESTOptionsGe
 	//# `Device` MUST have a `status` subresource.
 	statusStore := *store
 	status := NewStatusStrategy(strategy)
-	status.policies = opts.Policies
+	status.policies, status.members = opts.Policies, opts.Members
 	statusStore.UpdateStrategy = status
 	statusStore.ResetFieldsStrategy = status
 	return &REST{store}, &StatusREST{store: &statusStore, policies: opts.Policies, usage: opts.Usage}, nil
