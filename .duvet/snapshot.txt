@@ -465,6 +465,7 @@ SPECIFICATION: [Solas specification](spec/solas.md)
 
   SECTION: [11.1. Format version](#11-1-format-version)
     TEXT[!MUST]: The store MUST hold one finalized format version.
+    TEXT[implementation]: The finalized format starts at 1.
     TEXT[!MUST,implementation,test]: Each object MUST record the format version of its last write in the
     TEXT[!MUST,implementation,test]: annotation `solas.dev/format`.
     TEXT[implementation]: An object with no record has format 1.
@@ -485,15 +486,15 @@ SPECIFICATION: [Solas specification](spec/solas.md)
   SECTION: [11.4. Finalization](#11-4-finalization)
     TEXT[!MUST,implementation,test]: Each member MUST report the lowest and the highest format that it
     TEXT[!MUST,implementation,test]: supports in its `Member` status.
-    TEXT[!MUST]: The finalized format MUST only move up.
-    TEXT[!MUST]: The finalized format MUST move to a value only when every `Active`
-    TEXT[!MUST]: member reports a highest format at or above that value.
+    TEXT[!MUST,implementation,test]: The finalized format MUST only move up.
+    TEXT[!MUST,implementation,test]: The finalized format MUST move to a value only when every `Active`
+    TEXT[!MUST,implementation,test]: member reports a highest format at or above that value.
 
   SECTION: [11.5. Rollback](#11-5-rollback)
     TEXT[!MAY]: A member MAY roll back to a release whose maximum format is at or above
     TEXT[!MAY]: the finalized format.
-    TEXT[!MUST]: A server MUST refuse to start when the finalized format is above its
-    TEXT[!MUST]: maximum format.
+    TEXT[!MUST,implementation,test]: A server MUST refuse to start when the finalized format is above its
+    TEXT[!MUST,implementation,test]: maximum format.
 
   SECTION: [12.1. Seal](#12-1-seal)
     TEXT[!MUST,implementation,test]: A sealed store MUST reject every write.

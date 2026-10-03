@@ -151,3 +151,27 @@ type MemberList struct {
 
 	Items []Member `json:"items"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// StoreFormat holds the finalized format of the store, spec 11.1. The API
+// does not serve it: solas finalize writes it at the storage level, and
+// solas migrate copies it.
+type StoreFormat struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Finalized is the finalized format. Zero reads as 1.
+	// +optional
+	Finalized int32 `json:"finalized,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// StoreFormatList is a list of store formats. A store holds at most one.
+type StoreFormatList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []StoreFormat `json:"items"`
+}

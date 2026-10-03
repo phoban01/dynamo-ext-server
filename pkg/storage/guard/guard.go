@@ -12,6 +12,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/storage"
+
+	"github.com/phoban01/solas/pkg/format"
 )
 
 // Transition checks a write from old to new. old is nil for a create.
@@ -22,13 +24,12 @@ type Transition func(old, new runtime.Object) error
 // transition check of the resource.
 type store struct {
 	storage.Interface
-	check  Transition
-	format int
+	check Transition
 }
 
 // Wrap returns s with the guard. check may be nil. Reads pass through.
 func Wrap(s storage.Interface, check Transition) storage.Interface {
-	return &store{Interface: s, check: check, format: MaxFormat}
+	return &store{Interface: s, check: check}
 }
 
 // Create checks a new object against no old object, and stamps it.
@@ -38,7 +39,7 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 			return rejected(err)
 		}
 	}
-	if err := stamp(obj, s.format); err != nil {
+	if err := stamp(obj, format.Write()); err != nil {
 		return rejected(err)
 	}
 	return s.Interface.Create(ctx, key, obj, out, ttl)
@@ -62,7 +63,7 @@ func (s *store) GuaranteedUpdate(ctx context.Context, key string, destination ru
 				return nil, nil, rejected(err)
 			}
 		}
-		if err := stamp(out, s.format); err != nil {
+		if err := stamp(out, format.Write()); err != nil {
 			return nil, nil, rejected(err)
 		}
 		return out, ttl, nil

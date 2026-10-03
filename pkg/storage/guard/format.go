@@ -69,8 +69,8 @@ func checkFormat(obj runtime.Object) error {
 //# A server MUST NOT write an object in a format newer than the finalized
 //# format.
 
-// stamp records the format of this write. Until finalization (spec 11.4)
-// exists, the finalized format and the maximum format are both 1.
+// stamp records the format of this write: the finalized format that the
+// server read from the store.
 func stamp(obj runtime.Object, f int) error {
 	m, err := meta.Accessor(obj)
 	if err != nil {
