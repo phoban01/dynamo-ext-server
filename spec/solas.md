@@ -622,6 +622,33 @@ The Quint model checks these properties:
 - A claim for a free, matching device becomes `Bound` while its member
   is live.
 
+### 8.5. Reclaim policy
+
+A `Device` MAY set a reclaim policy in `spec.reclaimPolicy`: `Delete`,
+`Delay`, or `Retain`, ADR 0016.
+The default reclaim policy is `Delete`.
+The reclaim policy decides only when a sweeper may clear the `claimRef`
+of a member that is gone.
+It does not change when a member is gone, or when a claim is in effect.
+
+Under `Delete`, the sweeper MUST clear the `claimRef` as section 8.3
+describes.
+Under `Delay`, the sweeper MUST NOT clear the `claimRef` until the
+reclaim time `R` of the device has passed.
+The sweeper MUST measure `R` on its own clock, from its first sweep that
+found the holder gone.
+`R` is `spec.reclaimDelaySeconds` of the device.
+Under `Retain`, the sweeper MUST NOT clear the `claimRef`.
+
+An operator MAY release a retained device.
+The release MUST be a status update that clears `claimRef` and carries
+the resource version that the operator read.
+The release MUST fail while the holder's member UID is live.
+The release MUST record who released the device.
+
+A policy only removes or delays a clear, so the rules of 8.4 hold for
+every policy.
+
 ## 9. Pivot
 
 ### 9.1. Mapping

@@ -93,6 +93,9 @@ Claude Code session, so heavy jobs must not overlap.
 - `solas migrate` moves the data to another store: it seals the source,
   copies, and verifies
   ([docs/adr/0015-migration.md](docs/adr/0015-migration.md)).
+- The reclaim policy of a Device decides when its devices are cleared
+  after their member is gone: Delete, Delay, or Retain
+  ([docs/adr/0016-reclaim-policy.md](docs/adr/0016-reclaim-policy.md)).
 
 ## Writing
 

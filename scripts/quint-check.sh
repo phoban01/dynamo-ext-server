@@ -55,6 +55,7 @@ for f in quint/*.qnt quint/negative/*.qnt; do
 done
 
 pass "test solas2" quint test quint/solas.qnt --main solas2
+pass "test solas2delay" quint test quint/solas.qnt --main solas2delay
 pass "test migrate2" quint test quint/migrate.qnt --main migrate2
 # The test passes when its scenario breaks claimMatchesDevice.
 pass "negative adopt-any-uid" quint test quint/negative/adopt-any-uid.qnt \
@@ -91,7 +92,9 @@ done
 # A loss needs a sweep after fresh reads and a rejoin, so it takes longer
 # runs to reach at random.
 violate "witness solas2 witnessLost" quint run quint/solas.qnt --main solas2 \
-  --invariant witnessLost --max-steps 80 --max-samples "$samples" --seed "$seed"
+  --invariant witnessLost --max-steps 130 --max-samples "$samples" --seed "$seed"
+violate "witness solas2 witnessRetained" quint run quint/solas.qnt --main solas2 \
+  --invariant witnessRetained --max-steps 80 --max-samples "$samples" --seed "$seed"
 for w in witnessSwitched witnessBoundOnDst; do
   violate "witness migrate2 $w" run quint/migrate.qnt --main migrate2 --invariant "$w"
 done

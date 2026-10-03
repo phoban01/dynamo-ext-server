@@ -51,6 +51,10 @@ module solas {
     // lastRead is the local time of the last read of the member list that
     // worked, spec 8.1.
     lastRead: int,
+    // stale holds, for each device, the member UID of a holder that the
+    // sweeper found gone, and the local time at which it first did, for
+    // the reclaim time of Delay, spec 8.5.
+    stale: str -> { muid: int, at: int },
     sweepPhase: int,
     sweepDevs: str -> Device,
     sweepUids: Set[int],
@@ -98,6 +102,10 @@ module solas {
     // list before it forgets what it saw, spec 8.1. 0 turns it off; the
     // negative model outage-sweep does that.
     readGap: int,
+    // reclaim is the reclaim policy of each device: Delete, Delay, or
+    // Retain, spec 8.5. reclaimDelay is the reclaim time R of Delay.
+    reclaim: str -> str,
+    reclaimDelay: int,
   }
 
   type State = {
@@ -121,6 +129,9 @@ module solas {
     bindings: Set[Binding],
     staleAccepted: bool,
     staleRejected: bool,
+    // Ghost: true once the sweeper cleared a device with the Retain
+    // policy, spec 8.5. The invariant retainNeverSwept keeps it false.
+    sweptRetained: bool,
   }
 
   const CFG: Config
@@ -143,6 +154,7 @@ module solas {
     draining: false,
     seen: cfg.clusters.mapBy(_ => NOSEEN),
     lastRead: cfg.clock0.get(c),
+    stale: cfg.devices.mapBy(_ => { muid: -1, at: 0 }),
     sweepPhase: 0,
     sweepDevs: cfg.devices.mapBy(_ => { rv: 0, ref: Free, token: 0, preempt: Free }),
     sweepUids: Set(),
@@ -168,6 +180,7 @@ module solas {
     bindings: Set(),
     staleAccepted: false,
     staleRejected: false,
+    sweptRetained: false,
   }
 
   // ---- Time, spec 7.5 ----
@@ -346,6 +359,7 @@ module solas {
           renewInFlight: false,
           draining: false,
           seen: CFG.clusters.mapBy(_ => NOSEEN),
+          stale: CFG.devices.mapBy(_ => { muid: -1, at: 0 }),
           sweepPhase: 0,
         }),
       },
@@ -461,18 +475,57 @@ module solas {
     val cl = s.clusters.get(c)
     val listed = cl.sweepDevs.get(d)
     val rv = s.devCounter + 1
+    val st = cl.stale.get(d)
+    val policy = CFG.reclaim.get(d)
     all {
       active(cl),
       cl.sweepPhase == 2,
       not(isFree(listed.ref)),
       not(cl.sweepUids.contains(refMuid(listed.ref))),
       s.devices.get(d).rv == listed.rv,
+      // The reclaim policy of the device, spec 8.5. Delete clears at once.
+      // Delay clears R after this sweeper first found the holder gone, by
+      // its own clock. Retain never lets the sweeper clear.
+      policy == "Delete"
+        or (policy == "Delay" and st.muid == refMuid(listed.ref) and cl.clock >= st.at + CFG.reclaimDelay),
       s' = {
         ...s,
         devices: s.devices.set(d, { ...s.devices.get(d), rv: rv, ref: Free }),
         devCounter: rv,
         cleared: true,
+        sweptRetained: s.sweptRetained or policy == "Retain",
       },
+    }
+  }
+
+  // The sweeper records when it first found the holder of a device gone,
+  // for the reclaim time of Delay, spec 8.5.
+  action markStale(c: str, d: str): bool = {
+    val cl = s.clusters.get(c)
+    val listed = cl.sweepDevs.get(d)
+    all {
+      active(cl),
+      cl.sweepPhase == 2,
+      not(isFree(listed.ref)),
+      not(cl.sweepUids.contains(refMuid(listed.ref))),
+      cl.stale.get(d).muid != refMuid(listed.ref),
+      s' = {
+        ...s,
+        clusters: s.clusters.set(c, { ...cl, stale: cl.stale.set(d, { muid: refMuid(listed.ref), at: cl.clock }) }),
+      },
+    }
+  }
+
+  // An operator releases a retained device whose holder's member is gone,
+  // spec 8.5. The release is one conditional write, as any clear is.
+  action operatorRelease(d: str): bool = {
+    val dv = s.devices.get(d)
+    val rv = s.devCounter + 1
+    all {
+      CFG.reclaim.get(d) == "Retain",
+      not(isFree(dv.ref)),
+      not(liveUids(s.members).contains(refMuid(dv.ref))),
+      s' = { ...s, devices: s.devices.set(d, { ...dv, rv: rv, ref: Free }), devCounter: rv, cleared: true },
     }
   }
 
@@ -953,7 +1006,11 @@ module solas {
 
   val fencing = tokensUnique and usesInOrder and useMatchesBinding
 
+  // The sweeper never clears a device with the Retain policy, spec 8.5.
+  val retainNeverSwept = not(s.sweptRetained)
+
   val safety = noDoubleBind and claimMatchesDevice and leaseSafety and fencing and requestBeatsHolder
+    and retainNeverSwept
 
   // ---- Witnesses ----
   // Each witness must be violated in a run. A violation shows that the
@@ -963,6 +1020,9 @@ module solas {
   val witnessCleared = not(s.cleared)
   val witnessLost = CFG.claims.forall(k => s.claims.get(k).phase != "Lost")
   val witnessLeft = not(s.someLeft)
+  // A retained device still names a holder whose member is gone, spec 8.5.
+  val witnessRetained = not(CFG.devices.exists(d => CFG.reclaim.get(d) == "Retain"
+    and not(isFree(s.devices.get(d).ref)) and not(liveUids(s.members).contains(refMuid(s.devices.get(d).ref)))))
   // A device rejects a use with a stale token. Random runs rarely reach
   // it, so fencingTest plays it step by step.
   val witnessStaleRejected = not(s.staleRejected)
@@ -1006,6 +1066,8 @@ module solas {
       sweepListDevices(c),
       sweepListMembers(c),
       sweepClear(c, d),
+      markStale(c, d),
+      operatorRelease(d),
       sweepDone(c),
     },
   }
@@ -1060,6 +1122,8 @@ module solas2 {
     version: Map("a" -> 1, "b" -> 2),
     skipTokenVersion: 0,
     readGap: 15,
+    reclaim: Map("d1" -> "Delete", "d2" -> "Retain"),
+    reclaimDelay: 20,
   }).*
 
   pure val fastB = Map("a" -> 0, "b" -> 1)
@@ -1267,4 +1331,89 @@ module solas2 {
       .then(tickBy(fastB)).then(readMembers("b"))
       .then(sweepDelete("b", "a"))
       .expect(not(s.members.get("a").exists) and safety)
+
+  // a holds the retained d2 and crashes. b sweeps a's Member, but it cannot
+  // clear d2, spec 8.5.
+  run retainedHeld =
+    init
+      .then(join("a"))
+      .then(bindSend("a1", "d2"))
+      .then(bindLand({ cluster: "a", claim: "a1", dev: "d2", rv: 0, muid: 1 }))
+      .then(adopt("a1", "d2"))
+      .then(join("b"))
+      .then(observe("b", "a"))
+      .then(crash("a"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(sweepDelete("b", "a"))
+      .then(sweepListDevices("b"))
+      .then(sweepListMembers("b"))
+      .expect(not(isFree(s.devices.get("d2").ref)) and safety)
+
+  run retainNoSweepTest = retainedHeld.then(sweepClear("b", "d2").fail())
+
+  // An operator releases d2, and b1 can bind it.
+  run operatorReleaseTest =
+    retainedHeld
+      .then(operatorRelease("d2"))
+      .expect(isFree(s.devices.get("d2").ref) and safety)
+}
+
+// solas2 with d2 under the Delay policy: the sweeper clears it only R = 20
+// after it first found the holder gone, by its own clock, spec 8.5.
+module solas2delay {
+  import solas(CFG = {
+    clusters: Set("a", "b"),
+    devices: Set("d1", "d2"),
+    claims: Set("a1", "a2", "b1"),
+    owner: Map("a1" -> "a", "a2" -> "a", "b1" -> "b"),
+    clock0: Map("a" -> 0, "b" -> 1000),
+    D: 30,
+    M: 6,
+    tick: 10,
+    drift: 1,
+    unconditionalBind: false,
+    membersFirst: false,
+    adoptAnyUid: false,
+    noTokenCheck: false,
+    priority: Map("a1" -> 1, "a2" -> 0, "b1" -> 2),
+    preemptible: Map("d1" -> true, "d2" -> false),
+    grace: 20,
+    forceClear: false,
+    noPreemptionWait: false,
+    version: Map("a" -> 1, "b" -> 2),
+    skipTokenVersion: 0,
+    readGap: 15,
+    reclaim: Map("d1" -> "Delete", "d2" -> "Delay"),
+    reclaimDelay: 20,
+  }).*
+
+  pure val fastB = Map("a" -> 0, "b" -> 1)
+
+  run delayedHeld =
+    init
+      .then(join("a"))
+      .then(bindSend("a1", "d2"))
+      .then(bindLand({ cluster: "a", claim: "a1", dev: "d2", rv: 0, muid: 1 }))
+      .then(adopt("a1", "d2"))
+      .then(join("b"))
+      .then(observe("b", "a"))
+      .then(crash("a"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(sweepDelete("b", "a"))
+      .then(sweepListDevices("b"))
+      .then(sweepListMembers("b"))
+      .then(markStale("b", "d2"))
+
+  run delayNotYetTest = delayedHeld.then(sweepClear("b", "d2").fail())
+
+  run delayClearTest =
+    delayedHeld
+      .then(tickBy(fastB))
+      .then(tickBy(fastB))
+      .then(sweepClear("b", "d2"))
+      .expect(isFree(s.devices.get("d2").ref) and safety)
 }
