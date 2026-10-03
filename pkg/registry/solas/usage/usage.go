@@ -102,3 +102,48 @@ func (u *Store) Entries(ctx context.Context, member string) ([]solas.UsageEntry,
 	err := u.s.Get(ctx, key(member), storage.GetOptions{IgnoreNotFound: true}, &mu)
 	return mu.Entries, err
 }
+
+// DefaultGrace is how long an entry with no held device stays: longer
+// than the deadline of a request, spec 15.3.
+const DefaultGrace = 2 * time.Minute
+
+//= spec/solas.md#15-3-cleanup
+//# The member's own server MAY remove an entry whose device the member does
+//# not hold.
+
+//= spec/solas.md#15-3-cleanup
+//# It MUST NOT remove such an entry before a grace that is longer than the
+//# deadline of a request has passed since the entry was added, by its own
+//# clock.
+
+// Cleanup removes each entry of member whose device the member does not
+// hold, once the entry is older than grace by now. devices is the raw
+// storage of the devices. It returns the devices it removed.
+func (u *Store) Cleanup(ctx context.Context, devices storage.Interface, member string, grace time.Duration, now time.Time) ([]string, error) {
+	entries, err := u.Entries(ctx, member)
+	if err != nil || len(entries) == 0 {
+		return nil, err
+	}
+	var list solas.DeviceList
+	if err := devices.GetList(ctx, "/solas.dev/devices", storage.ListOptions{Recursive: true, Predicate: storage.Everything}, &list); err != nil {
+		return nil, err
+	}
+	held := map[string]bool{}
+	for _, d := range list.Items {
+		if r := d.Status.ClaimRef; r != nil && r.Member == member {
+			held[d.Name] = true
+		}
+	}
+	var removed []string
+	for _, e := range entries {
+		if held[e.Device] || now.Sub(e.Added.Time) < grace {
+			continue
+		}
+		added := e.Added
+		if err := u.RemoveIf(ctx, member, e.Device, func(cur solas.UsageEntry) bool { return cur.Added.Equal(&added) }); err != nil {
+			return removed, err
+		}
+		removed = append(removed, e.Device)
+	}
+	return removed, nil
+}

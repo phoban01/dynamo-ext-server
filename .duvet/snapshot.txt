@@ -659,8 +659,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
 
   SECTION: [15.3. Cleanup](#15-3-cleanup)
     TEXT[!MUST,implementation]: A clear of a device MUST remove it from the usage set of its member.
-    TEXT[!MAY]: The member's own server MAY remove an entry whose device the member does
-    TEXT[!MAY]: not hold.
-    TEXT[!MUST]: It MUST NOT remove such an entry before a grace that is longer than the
-    TEXT[!MUST]: deadline of a request has passed since the entry was added, by its own
-    TEXT[!MUST]: clock.
+    TEXT[!MAY,implementation]: The member's own server MAY remove an entry whose device the member does
+    TEXT[!MAY,implementation]: not hold.
+    TEXT[!MUST,implementation,test]: It MUST NOT remove such an entry before a grace that is longer than the
+    TEXT[!MUST,implementation,test]: deadline of a request has passed since the entry was added, by its own
+    TEXT[!MUST,implementation,test]: clock.
