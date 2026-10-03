@@ -406,6 +406,7 @@ func Convert_solas_Release_To_v1alpha1_Release(in *solas.Release, out *Release, 
 func autoConvert_v1alpha1_StoreFormat_To_solas_StoreFormat(in *StoreFormat, out *solas.StoreFormat, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	out.Finalized = in.Finalized
+	out.Epoch = in.Epoch
 	return nil
 }
 
@@ -417,6 +418,7 @@ func Convert_v1alpha1_StoreFormat_To_solas_StoreFormat(in *StoreFormat, out *sol
 func autoConvert_solas_StoreFormat_To_v1alpha1_StoreFormat(in *solas.StoreFormat, out *StoreFormat, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	out.Finalized = in.Finalized
+	out.Epoch = in.Epoch
 	return nil
 }
 

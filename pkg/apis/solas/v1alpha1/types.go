@@ -176,6 +176,9 @@ type StoreFormat struct {
 	// Finalized is the finalized format. Zero reads as 1.
 	// +optional
 	Finalized int32 `json:"finalized,omitempty"`
+	// Epoch is the epoch of the store, spec 13.1. A restore moves it up.
+	// +optional
+	Epoch int64 `json:"epoch,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

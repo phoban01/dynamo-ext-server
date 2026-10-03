@@ -577,8 +577,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
 
   SECTION: [13.2. Fencing tokens](#13-2-fencing-tokens)
     TEXT[!MUST]: A fencing token MUST hold the epoch of its bind in its high 32 bits.
-    TEXT[!MUST]: When a status update sets `claimRef` on a free device whose token is
-    TEXT[!MUST]: below `epoch * 2^32`, the server MUST set the token to `epoch * 2^32 + 1`.
+    TEXT[!MUST,implementation,test]: When a status update sets `claimRef` on a free device whose token is
+    TEXT[!MUST,implementation,test]: below `epoch * 2^32`, the server MUST set the token to `epoch * 2^32 + 1`.
 
   SECTION: [13.3. Resource versions](#13-3-resource-versions)
     TEXT[!MUST]: After a restore, every resource version MUST be above every resource

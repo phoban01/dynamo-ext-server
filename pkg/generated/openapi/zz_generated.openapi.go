@@ -635,6 +635,13 @@ func schema_pkg_apis_solas_v1alpha1_StoreFormat(ref common.ReferenceCallback) co
 							Format:      "int32",
 						},
 					},
+					"epoch": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Epoch is the epoch of the store, spec 13.1. A restore moves it up.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 				},
 			},
 		},

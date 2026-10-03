@@ -18,6 +18,7 @@ import (
 
 	"github.com/phoban01/solas/pkg/apis/solas"
 	"github.com/phoban01/solas/pkg/apis/solas/validation"
+	"github.com/phoban01/solas/pkg/format"
 )
 
 // strategy handles creates, updates, and deletes of devices.
@@ -123,7 +124,7 @@ func (statusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obj
 // update from old to d.
 func nextToken(old, d *solas.Device) int64 {
 	if old.Status.ClaimRef == nil && d.Status.ClaimRef != nil {
-		return old.Status.FencingToken + 1
+		return format.NextToken(old.Status.FencingToken, format.Epoch())
 	}
 	return old.Status.FencingToken
 }

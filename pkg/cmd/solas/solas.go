@@ -134,6 +134,11 @@ func checkFormat(ctx context.Context, s *migrate.Store) error {
 			f, format.Min, format.Max)
 	}
 	format.SetFinalized(f)
+	e, err := s.Epoch(ctx)
+	if err != nil {
+		return fmt.Errorf("read the store epoch: %w", err)
+	}
+	format.SetEpoch(e)
 	return nil
 }
 

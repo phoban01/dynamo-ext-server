@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/phoban01/solas/pkg/apis/solas"
+	"github.com/phoban01/solas/pkg/format"
 )
 
 var ref1 = &solas.ClaimRef{Member: "a", MemberUID: "mu", Namespace: "ns", Name: "c1", UID: "u1"}
@@ -158,5 +159,34 @@ func TestClearRecordsTheRelease(t *testing.T) {
 	st.PrepareForUpdate(ctx, next, cleared)
 	if next.Status.LastRelease == nil || next.Status.LastRelease.By != "alice" {
 		t.Errorf("record after a later update = %+v, want the server's record", next.Status.LastRelease)
+	}
+}
+
+//= spec/solas.md#13-2-fencing-tokens
+//= type=test
+//# When a status update sets `claimRef` on a free device whose token is
+//# below `epoch * 2^32`, the server MUST set the token to `epoch * 2^32 + 1`.
+
+// TestBindInANewEpoch binds a device with token 7 in epoch 3, in the
+// strategy and in the storage guard.
+func TestBindInANewEpoch(t *testing.T) {
+	format.SetEpoch(3)
+	t.Cleanup(func() { format.SetEpoch(0) })
+	want := int64(3)<<32 + 1
+
+	free := dev("d", nil)
+	free.Status.FencingToken = 7
+	bound := dev("d", &solas.ClaimRef{Member: "a", MemberUID: "mu", Namespace: "ns", Name: "c1", UID: "u1"})
+	NewStatusStrategy(NewStrategy(nil)).PrepareForUpdate(context.Background(), bound, free)
+	if bound.Status.FencingToken != want {
+		t.Errorf("strategy: token %d, want %d", bound.Status.FencingToken, want)
+	}
+	if err := Transition(free, bound); err != nil {
+		t.Errorf("guard rejected the epoch token: %v", err)
+	}
+	old := bound.DeepCopy()
+	old.Status.FencingToken = 8
+	if err := Transition(free, old); err == nil {
+		t.Error("guard accepted token 8 in epoch 3")
 	}
 }
