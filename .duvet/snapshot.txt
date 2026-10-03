@@ -605,11 +605,11 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: `etcdutl snapshot restore --bump-revision` and `--mark-compacted`.
 
   SECTION: [14.1. Offer](#14-1-offer)
-    TEXT[!MUST]: Before it offers a device, the holder's controller MUST set its claim to
-    TEXT[!MUST]: `Transferring`.
-    TEXT[!MUST]: The offer MUST be a status update of the device that sets
-    TEXT[!MUST]: `status.offer` to the named claim, its member, and its member UID.
-    TEXT[!MUST]: The offer MUST carry the resource version that the controller read.
+    TEXT[!MUST,implementation,test]: Before it offers a device, the holder's controller MUST set its claim to
+    TEXT[!MUST,implementation,test]: `Transferring`.
+    TEXT[!MUST,implementation]: The offer MUST be a status update of the device that sets
+    TEXT[!MUST,implementation]: `status.offer` to the named claim, its member, and its member UID.
+    TEXT[!MUST,implementation]: The offer MUST carry the resource version that the controller read.
     TEXT[!MUST,implementation,test]: The server MUST reject an offer on a free device, and a second offer
     TEXT[!MUST,implementation,test]: while one stands.
     TEXT[!MUST,implementation,test]: The server MUST reject an offer while a preemption request stands.
@@ -623,20 +623,20 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation,test]: The bind MUST be one status update that sets `claimRef` to the named
     TEXT[!MUST,implementation,test]: claim, sets `status.fencingToken` to the next token, spec 5.3 and 13.2,
     TEXT[!MUST,implementation,test]: and clears `status.offer`.
-    TEXT[!MUST]: When the old claim's controller sees that its device names another
-    TEXT[!MUST]: claim, it MUST stop treating the device as its own, and MUST NOT write to
-    TEXT[!MUST]: the device.
+    TEXT[!MUST,implementation,test]: When the old claim's controller sees that its device names another
+    TEXT[!MUST,implementation,test]: claim, it MUST stop treating the device as its own, and MUST NOT write to
+    TEXT[!MUST,implementation,test]: the device.
 
   SECTION: [14.3. Withdraw](#14-3-withdraw)
-    TEXT[!MAY]: The holder MAY withdraw an offer that nobody bound, with a status update
-    TEXT[!MAY]: that clears `status.offer`, and set its claim back to `Bound`.
-    TEXT[!MUST]: The sweeper MUST clear an offer whose member UID is not in the member
-    TEXT[!MUST]: list, as it does for a preemption request, spec 10.9.
+    TEXT[!MAY,implementation,test]: The holder MAY withdraw an offer that nobody bound, with a status update
+    TEXT[!MAY,implementation,test]: that clears `status.offer`, and set its claim back to `Bound`.
+    TEXT[!MUST,implementation,test]: The sweeper MUST clear an offer whose member UID is not in the member
+    TEXT[!MUST,implementation,test]: list, as it does for a preemption request, spec 10.9.
 
   SECTION: [14.4. Pre-bound claims](#14-4-pre-bound-claims)
     TEXT[!MAY]: A claim MAY name its device in `spec.deviceName`.
-    TEXT[!MUST]: A claim that names a device MUST bind only that device: against an offer
-    TEXT[!MUST]: that names the claim, or as a normal bind when the device is free.
+    TEXT[!MUST,implementation,test]: A claim that names a device MUST bind only that device: against an offer
+    TEXT[!MUST,implementation,test]: that names the claim, or as a normal bind when the device is free.
 
   SECTION: [14.5. Recovery of a Lost claim](#14-5-recovery-of-a-lost-claim)
     TEXT[!MAY]: A member that joined again with a new UID MAY recover a device whose

@@ -979,6 +979,11 @@ A holder can hand its device to a named claim, ADR 0019.
 
 ### 14.1. Offer
 
+A user starts a transfer with the annotation `solas.dev/transfer-to` on
+the claim, set to the member, the namespace, the name, and the UID of the
+target claim, separated by `/`.
+The UID is in the value because the holder cannot read a claim in another
+cluster.
 Before it offers a device, the holder's controller MUST set its claim to
 `Transferring`.
 A `Transferring` claim is not in effect, so its workload stops before
