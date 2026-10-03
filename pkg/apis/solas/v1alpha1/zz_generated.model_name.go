@@ -8,6 +8,11 @@
 package v1alpha1
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in Bucket) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.Bucket"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in ClaimRef) OpenAPIModelName() string {
 	return "dev.solas.v1alpha1.ClaimRef"
 }
@@ -43,6 +48,21 @@ func (in MemberList) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in MemberPolicy) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.MemberPolicy"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in MemberPolicyList) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.MemberPolicyList"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in MemberPolicySpec) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.MemberPolicySpec"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in MemberSpec) OpenAPIModelName() string {
 	return "dev.solas.v1alpha1.MemberSpec"
 }
@@ -53,6 +73,36 @@ func (in MemberStatus) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in MemberUsage) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.MemberUsage"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in MemberUsageList) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.MemberUsageList"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in PreemptionRequest) OpenAPIModelName() string {
 	return "dev.solas.v1alpha1.PreemptionRequest"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in Release) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.Release"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in StoreFormat) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.StoreFormat"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in StoreFormatList) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.StoreFormatList"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in UsageEntry) OpenAPIModelName() string {
+	return "dev.solas.v1alpha1.UsageEntry"
 }

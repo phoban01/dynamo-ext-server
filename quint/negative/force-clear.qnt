@@ -22,6 +22,12 @@ module force_clear {
     grace: 20,
     forceClear: true,
     noPreemptionWait: false,
+    version: Map("a" -> 1, "b" -> 2),
+    skipTokenVersion: 0,
+    readGap: 15,
+    reclaim: Map("d1" -> "Delete", "d2" -> "Delete"),
+    reclaimDelay: 0,
+    protected: Set(),
   }).* from "../solas"
 
   pure val noDrift = Map("a" -> 0, "b" -> 0)

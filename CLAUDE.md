@@ -84,12 +84,36 @@ Claude Code session, so heavy jobs must not overlap.
 - The API groups are `solas.dev/v1alpha1` for Device and Member, and
   `claims.solas.dev/v1alpha1` for DeviceClaim
   ([docs/adr/0006-api-group.md](docs/adr/0006-api-group.md)).
+- Members of two releases share the store; objects record their format,
+  and `solas finalize` moves the shared format up
+  ([docs/adr/0013-version-skew.md](docs/adr/0013-version-skew.md)).
 - One flag, `--storage-url`, picks the shared store: a DynamoDB table or
   an etcd cluster
   ([docs/adr/0014-storage-url.md](docs/adr/0014-storage-url.md)).
 - `solas migrate` moves the data to another store: it seals the source,
   copies, and verifies
   ([docs/adr/0015-migration.md](docs/adr/0015-migration.md)).
+- The reclaim policy of a Device decides when its devices are cleared
+  after their member is gone: Delete, Delay, or Retain
+  ([docs/adr/0016-reclaim-policy.md](docs/adr/0016-reclaim-policy.md)).
+- A gatekeeper in front of each actuator checks fencing tokens against
+  the store (proposed; MAAS designed, OCN open)
+  ([docs/adr/0017-actuator-gatekeepers.md](docs/adr/0017-actuator-gatekeepers.md)).
+- A restore moves the store to a new epoch, which tokens and resource
+  versions carry, so they never go back
+  ([docs/adr/0018-restore-epoch.md](docs/adr/0018-restore-epoch.md)).
+- A holder transfers a device to a named claim in one write, and a claim
+  can name its device
+  ([docs/adr/0019-transfer.md](docs/adr/0019-transfer.md)).
+- A rejoined member recovers a device that still names its old identity,
+  with a token raise
+  ([docs/adr/0020-lost-claim-recovery.md](docs/adr/0020-lost-claim-recovery.md)).
+- An operator limits each member in a MemberPolicy; the server reserves
+  a place in the member's usage set before each bind
+  ([docs/adr/0021-member-limits.md](docs/adr/0021-member-limits.md)).
+- Read and write scoping in the store (proposed): a shared device catalog
+  with minimal holder data, and a partition per member for its own objects
+  ([docs/adr/0022-read-scoping.md](docs/adr/0022-read-scoping.md)).
 
 ## Writing
 

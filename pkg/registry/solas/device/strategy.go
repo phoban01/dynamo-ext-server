@@ -5,10 +5,12 @@ import (
 	"context"
 	"fmt"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/names"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/phoban01/solas/pkg/apis/solas"
 	"github.com/phoban01/solas/pkg/apis/solas/validation"
+	"github.com/phoban01/solas/pkg/format"
 )
 
 // strategy handles creates, updates, and deletes of devices.
@@ -24,9 +27,16 @@ type strategy struct {
 	names.NameGenerator
 }
 
+// PolicyLookup returns the MemberPolicy of a member, or nil when it has
+// none, spec 15.1.
+type PolicyLookup func(ctx context.Context, member string) (*solas.MemberPolicy, error)
+
 // statusStrategy handles updates of the status subresource.
 type statusStrategy struct {
 	strategy
+	// policies finds the MemberPolicy of a member. Nil means that no
+	// member has one.
+	policies PolicyLookup
 }
 
 // NewStrategy returns the strategy for devices.
@@ -36,7 +46,7 @@ func NewStrategy(typer runtime.ObjectTyper) strategy {
 
 // NewStatusStrategy returns the strategy for the status of devices.
 func NewStatusStrategy(s strategy) statusStrategy {
-	return statusStrategy{s}
+	return statusStrategy{strategy: s}
 }
 
 //= spec/solas.md#5-1-resource
@@ -98,6 +108,7 @@ func (statusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obj
 	// Labels and annotations belong to the main resource.
 	d.Labels, d.Annotations = o.Labels, o.Annotations
 	d.Status.FencingToken = nextToken(o, d)
+	d.Status.LastRelease = lastRelease(ctx, o, d)
 	//= spec/solas.md#10-7-bind-by-the-preemptor
 	//# The bind of the requesting claim MUST clear `status.preemption`.
 	if req := o.Status.Preemption; req != nil && o.Status.ClaimRef == nil && d.Status.ClaimRef != nil &&
@@ -120,13 +131,15 @@ func (statusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obj
 // update from old to d.
 func nextToken(old, d *solas.Device) int64 {
 	if old.Status.ClaimRef == nil && d.Status.ClaimRef != nil {
-		return old.Status.FencingToken + 1
+		return format.NextToken(old.Status.FencingToken, format.Epoch())
 	}
 	return old.Status.FencingToken
 }
 
-func (statusStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
-	return validation.ValidateDeviceStatusUpdate(obj.(*solas.Device), old.(*solas.Device))
+func (s statusStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
+	d, o := obj.(*solas.Device), old.(*solas.Device)
+	errs := validation.ValidateDeviceStatusUpdate(d, o)
+	return append(errs, s.validateProtected(ctx, d, o)...)
 }
 
 func (statusStrategy) WarningsOnUpdate(ctx context.Context, obj, old runtime.Object) []string {
@@ -157,4 +170,46 @@ func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
 // Match returns a predicate for devices.
 func Match(label labels.Selector, field fields.Selector) storage.SelectionPredicate {
 	return storage.SelectionPredicate{Label: label, Field: field, GetAttrs: GetAttrs}
+}
+
+//= spec/solas.md#8-5-reclaim-policy
+//# The release MUST record who released the device.
+
+// lastRelease returns the release record that the server stores. A clear
+// of claimRef records the user of the request, the time, and the claim
+// that held the device. Every other update keeps the old record; the
+// server ignores a record that a client sends.
+func lastRelease(ctx context.Context, old, d *solas.Device) *solas.Release {
+	if old.Status.ClaimRef == nil || d.Status.ClaimRef != nil {
+		return old.Status.LastRelease
+	}
+	by := ""
+	if u, ok := genericapirequest.UserFrom(ctx); ok {
+		by = u.GetName()
+	}
+	return &solas.Release{By: by, At: metav1.Now(), Claim: *old.Status.ClaimRef}
+}
+
+//= spec/solas.md#10-10-protected-holders
+//# The server MUST reject a `claimRef` with `protected: true` unless the
+//# `MemberPolicy` of its member sets `allowProtected`, spec 15.1.
+
+// validateProtected rejects a new protected claimRef of a member whose
+// policy does not allow protection.
+func (s statusStrategy) validateProtected(ctx context.Context, d, old *solas.Device) field.ErrorList {
+	ref := d.Status.ClaimRef
+	if ref == nil || !ref.Protected || (old.Status.ClaimRef != nil && old.Status.ClaimRef.Protected) {
+		return nil
+	}
+	if s.policies != nil {
+		p, err := s.policies(ctx, ref.Member)
+		if err != nil {
+			return field.ErrorList{field.InternalError(field.NewPath("status", "claimRef", "protected"), err)}
+		}
+		if p != nil && p.Spec.AllowProtected {
+			return nil
+		}
+	}
+	return field.ErrorList{field.Forbidden(field.NewPath("status", "claimRef", "protected"),
+		fmt.Sprintf("member %s may not protect its claims; an operator sets allowProtected in its MemberPolicy", ref.Member))}
 }

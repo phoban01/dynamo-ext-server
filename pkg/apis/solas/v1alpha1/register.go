@@ -31,6 +31,12 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&DeviceList{},
 		&Member{},
 		&MemberList{},
+		&StoreFormat{},
+		&StoreFormatList{},
+		&MemberPolicy{},
+		&MemberPolicyList{},
+		&MemberUsage{},
+		&MemberUsageList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

@@ -21,6 +21,12 @@ module adopt_any_uid {
     grace: 20,
     forceClear: false,
     noPreemptionWait: false,
+    version: Map("a" -> 1, "b" -> 2),
+    skipTokenVersion: 0,
+    readGap: 15,
+    reclaim: Map("d1" -> "Delete", "d2" -> "Delete"),
+    reclaimDelay: 0,
+    protected: Set(),
   }).* from "../solas"
 
   // Random search does not reach this bug, so a test plays it step by step.
@@ -34,9 +40,9 @@ module adopt_any_uid {
       // The bind lands. The claim is still Pending.
       .then(bindLand({ cluster: "a", claim: "a1", dev: "d1", rv: 0, muid: 1 }))
       .then(observe("b", "a"))
-      .then(tickBy(fastB))
-      .then(tickBy(fastB))
-      .then(tickBy(fastB))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
+      .then(tickBy(fastB)).then(readMembers("b"))
       // b expires and deletes a's Member.
       .then(sweepDelete("b", "a"))
       // a's renew finds no Member, so a joins again with UID 2.

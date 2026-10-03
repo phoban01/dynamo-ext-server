@@ -165,3 +165,54 @@ func TestBoundAtDoesNotChangeTheHolder(t *testing.T) {
 		t.Errorf("a new bind time counted as a new holder: %v", errs)
 	}
 }
+
+//= spec/solas.md#8-5-reclaim-policy
+//= type=test
+//# A `Device` MAY set a reclaim policy in `spec.reclaimPolicy`: `Delete`,
+//# `Delay`, or `Retain`, ADR 0016.
+
+func TestReclaimPolicy(t *testing.T) {
+	r := func(n int32) *int32 { return &n }
+	cases := []struct {
+		policy solas.ReclaimPolicy
+		delay  *int32
+		ok     bool
+	}{
+		{"", nil, true},
+		{solas.ReclaimDelete, nil, true},
+		{solas.ReclaimRetain, nil, true},
+		{solas.ReclaimDelay, r(300), true},
+		{solas.ReclaimDelay, r(0), true},
+		{solas.ReclaimDelay, nil, false},
+		{solas.ReclaimDelay, r(-1), false},
+		{solas.ReclaimRetain, r(300), false},
+		{solas.ReclaimDelete, r(300), false},
+		{"Keep", nil, false},
+	}
+	for _, c := range cases {
+		d := device(nil)
+		d.Spec.ReclaimPolicy, d.Spec.ReclaimDelaySeconds = c.policy, c.delay
+		if errs := ValidateDevice(d); (len(errs) == 0) != c.ok {
+			t.Errorf("policy %q delay %v: errors %v, want ok %v", c.policy, c.delay, errs, c.ok)
+		}
+	}
+}
+
+//= spec/solas.md#10-10-protected-holders
+//= type=test
+//# The server MUST reject a preemption request on a device whose holder is
+//# protected.
+
+func TestNoRequestOnAProtectedHolder(t *testing.T) {
+	holder := ref("c1")
+	holder.Protected = true
+	old := device(holder)
+	old.Spec.Preemptible = true
+	d := old.DeepCopy()
+	asker := ref("c2")
+	asker.Priority = 9
+	d.Status.Preemption = &solas.PreemptionRequest{Claim: *asker}
+	if errs := ValidateDeviceStatusUpdate(d, old); len(errs) == 0 {
+		t.Error("a preemption request on a protected holder passed")
+	}
+}
