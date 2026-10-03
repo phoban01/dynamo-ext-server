@@ -43,6 +43,10 @@ type Manager struct {
 	Lease     time.Duration
 	Margin    time.Duration
 	Clock     clock.PassiveClock
+	// MaxFormat is the highest format that this member reports. Zero means
+	// the maximum of this release; the simulator sets it to run releases
+	// side by side, spec 11.
+	MaxFormat int32
 
 	// Drained reports whether no device still names this member UID. The
 	// manager deletes its Member on leave only after that, spec 7.6.
@@ -134,7 +138,7 @@ func (m *Manager) join(ctx context.Context) error {
 		//= spec/solas.md#7-2-join
 		//# If the renew succeeds, the controller MUST keep the UID of that `Member`.
 		mem.Status.RenewTime = ptrMicro(send)
-		reportFormats(&mem.Status)
+		m.reportFormats(&mem.Status)
 		if err := m.Client.Status().Update(ctx, &mem); err != nil {
 			return client.IgnoreNotFound(ignoreConflict(err))
 		}
@@ -156,7 +160,7 @@ func (m *Manager) join(ctx context.Context) error {
 				Phase:     solasv1alpha1.MemberActive,
 				RenewTime: ptrMicro(send),
 				MinFormat: format.Min,
-				MaxFormat: format.Max,
+				MaxFormat: m.maxFormat(),
 			},
 		}
 		if err := m.Client.Create(ctx, &mem); err != nil {
@@ -199,7 +203,7 @@ func (m *Manager) renew(ctx context.Context) error {
 	}
 	send := m.Clock.Now()
 	mem.Status.RenewTime = ptrMicro(send)
-	reportFormats(&mem.Status)
+	m.reportFormats(&mem.Status)
 	err := m.Client.Status().Update(ctx, mem)
 	switch {
 	case err == nil:
@@ -323,6 +327,13 @@ func (m *Manager) markLost(ctx context.Context, uid types.UID) error {
 // reportFormats sets the format range of this release. A member reports it
 // when it joins and with each renew, so an upgraded member updates its
 // range with its first renew.
-func reportFormats(st *solasv1alpha1.MemberStatus) {
-	st.MinFormat, st.MaxFormat = format.Min, format.Max
+func (m *Manager) reportFormats(st *solasv1alpha1.MemberStatus) {
+	st.MinFormat, st.MaxFormat = format.Min, m.maxFormat()
+}
+
+func (m *Manager) maxFormat() int32 {
+	if m.MaxFormat != 0 {
+		return m.MaxFormat
+	}
+	return format.Max
 }

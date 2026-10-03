@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,6 +11,7 @@ import (
 	k8sstorage "k8s.io/apiserver/pkg/storage"
 
 	"github.com/phoban01/solas/pkg/apis/solas"
+	"github.com/phoban01/solas/pkg/format"
 	"github.com/phoban01/solas/pkg/registry/solas/member"
 )
 
@@ -53,15 +53,13 @@ func (s *Store) Finalize(ctx context.Context, n int32) error {
 	if err != nil {
 		return err
 	}
-	var behind []string
+	var ms []format.Member
 	for _, o := range objs {
 		m := o.(*solas.Member)
-		if _, hi := member.FormatRange(m); m.Status.Phase == solas.MemberActive && hi < n {
-			behind = append(behind, fmt.Sprintf("%s (highest format %d)", m.Name, hi))
-		}
+		_, hi := member.FormatRange(m)
+		ms = append(ms, format.Member{Name: m.Name, Active: m.Status.Phase == solas.MemberActive, Max: hi})
 	}
-	if len(behind) > 0 {
-		sort.Strings(behind)
+	if behind := format.Behind(ms, n); len(behind) > 0 {
 		return fmt.Errorf("cannot finalize format %d: these Active members do not support it: %s", n, strings.Join(behind, ", "))
 	}
 

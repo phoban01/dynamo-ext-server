@@ -491,8 +491,8 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation,test]: member reports a highest format at or above that value.
 
   SECTION: [11.5. Rollback](#11-5-rollback)
-    TEXT[!MAY]: A member MAY roll back to a release whose maximum format is at or above
-    TEXT[!MAY]: the finalized format.
+    TEXT[!MAY,implementation]: A member MAY roll back to a release whose maximum format is at or above
+    TEXT[!MAY,implementation]: the finalized format.
     TEXT[!MUST,implementation,test]: A server MUST refuse to start when the finalized format is above its
     TEXT[!MUST,implementation,test]: maximum format.
 
