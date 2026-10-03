@@ -37,6 +37,10 @@ type Sweeper struct {
 
 	mu   sync.Mutex
 	seen map[string]observation
+	// stale holds, for each device under the Delay policy, the member UID
+	// of the gone holder and the local time of the first sweep that found
+	// it gone, spec 8.5.
+	stale map[string]observation
 	// lastRead is the local time of the last member list that worked.
 	lastRead time.Time
 }
@@ -184,7 +188,7 @@ func (s *Sweeper) clearStale(ctx context.Context) error {
 	for i := range devices.Items {
 		d := &devices.Items[i]
 		ref := d.Status.ClaimRef
-		if ref == nil || live[ref.MemberUID] {
+		if ref == nil || live[ref.MemberUID] || !s.mayReclaim(d, ref.MemberUID) {
 			continue
 		}
 		//= spec/solas.md#8-3-clear-stale-claim-references
@@ -200,6 +204,9 @@ func (s *Sweeper) clearStale(ctx context.Context) error {
 		switch {
 		case err == nil:
 			log.FromContext(ctx).Info("freed a device of a gone member", "device", d.Name, "member", ref.Member)
+			s.mu.Lock()
+			delete(s.stale, d.Name)
+			s.mu.Unlock()
 		case apierrors.IsConflict(err), apierrors.IsNotFound(err):
 			//= spec/solas.md#8-3-clear-stale-claim-references
 			//# If the clear fails with `409 Conflict`, the sweeper MUST skip the device
@@ -219,4 +226,46 @@ func (s *Sweeper) readGap() time.Duration {
 		return s.ReadGap
 	}
 	return 2 * s.Interval
+}
+
+//= spec/solas.md#8-5-reclaim-policy
+//# Under `Delete`, the sweeper MUST clear the `claimRef` as section 8.3
+//# describes.
+
+//= spec/solas.md#8-5-reclaim-policy
+//# Under `Delay`, the sweeper MUST NOT clear the `claimRef` until the
+//# reclaim time `R` of the device has passed.
+
+//= spec/solas.md#8-5-reclaim-policy
+//# The sweeper MUST measure `R` on its own clock, from its first sweep that
+//# found the holder gone.
+
+//= spec/solas.md#8-5-reclaim-policy
+//# Under `Retain`, the sweeper MUST NOT clear the `claimRef`.
+
+// mayReclaim reports whether the reclaim policy of d lets the sweeper
+// clear its claimRef now. The holder, uid, is gone.
+func (s *Sweeper) mayReclaim(d *solasv1alpha1.Device, uid types.UID) bool {
+	switch d.Spec.ReclaimPolicy {
+	case solasv1alpha1.ReclaimRetain:
+		return false
+	case solasv1alpha1.ReclaimDelay:
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.stale == nil {
+			s.stale = map[string]observation{}
+		}
+		now := s.Clock.Now()
+		ob, ok := s.stale[d.Name]
+		if !ok || ob.uid != uid {
+			ob = observation{uid: uid, at: now}
+			s.stale[d.Name] = ob
+		}
+		var r time.Duration
+		if d.Spec.ReclaimDelaySeconds != nil {
+			r = time.Duration(*d.Spec.ReclaimDelaySeconds) * time.Second
+		}
+		return now.Sub(ob.at) >= r
+	}
+	return true
 }

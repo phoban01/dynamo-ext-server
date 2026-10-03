@@ -294,3 +294,24 @@ func TestSimStoreOutageNeedsTheReadGap(t *testing.T) {
 		t.Error("no member swept with the rule off; the scenario does not test it")
 	}
 }
+
+// TestSimReachesRetained shows that random runs reach a sweep while the
+// retained device names a gone member, so the check of spec 8.5 in sweep
+// has something to check.
+func TestSimReachesRetained(t *testing.T) {
+	ctx := context.Background()
+	for seed := uint64(1); seed <= 100; seed++ {
+		w, err := NewWorld(ctx, seed, DefaultConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := w.Run(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if w.sawRetained {
+			t.Logf("seed %d swept while the retained device named a gone member", seed)
+			return
+		}
+	}
+	t.Fatal("no seed reached a retained device of a gone member")
+}
