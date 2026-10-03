@@ -643,6 +643,7 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MAY,implementation]: ADR 0020.
     TEXT[!MUST,implementation,test]: A recovery MUST be one status update that sets the `claimRef` to the
     TEXT[!MUST,implementation,test]: member's current UID and raises `status.fencingToken`, spec 5.3 and 13.2.
+    TEXT[!MUST,implementation]: A recovery MUST clear `status.offer`, because the old identity made it.
     TEXT[!MUST,implementation,test]: The server MUST reject a recovery unless the member name and the claim
     TEXT[!MUST,implementation,test]: UID are the same, and no `Member` has the old member UID.
     TEXT[!MUST,implementation,test]: After a recovery, the controller MUST set the claim back to `Bound`.

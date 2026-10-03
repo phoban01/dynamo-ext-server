@@ -129,7 +129,10 @@ func (statusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obj
 	//= spec/solas.md#14-1-offer
 	//# When a status update clears `claimRef`, the server MUST clear
 	//# `status.offer`.
-	if (o.Status.ClaimRef != nil && d.Status.ClaimRef == nil) || validation.IsTransferBind(d, o) {
+
+	//= spec/solas.md#14-5-recovery-of-a-lost-claim
+	//# A recovery MUST clear `status.offer`, because the old identity made it.
+	if (o.Status.ClaimRef != nil && d.Status.ClaimRef == nil) || validation.IsTransferBind(d, o) || validation.IsRecovery(d, o) {
 		d.Status.Offer = nil
 	}
 }
@@ -244,9 +247,9 @@ func (s statusStrategy) WithMembers(members MemberLookup) statusStrategy {
 //# The server MUST reject a recovery unless the member name and the claim
 //# UID are the same, and no `Member` has the old member UID.
 
-// validateRecovery checks that the old member UID of a recovery is gone:
-// the Member with the name of the ref has the new UID. Member names are
-// unique and UIDs are never reused, so no Member has the old UID.
+// validateRecovery checks that the old member UID of a recovery is gone.
+// The old UID was the UID of the Member with the name of the ref, and a
+// UID belongs to one object only, so only that Member can have it.
 func (s statusStrategy) validateRecovery(ctx context.Context, d, old *solas.Device) field.ErrorList {
 	if !validation.IsRecovery(d, old) {
 		return nil
@@ -260,9 +263,9 @@ func (s statusStrategy) validateRecovery(ctx context.Context, d, old *solas.Devi
 	if err != nil {
 		return field.ErrorList{field.InternalError(path, err)}
 	}
-	if m == nil || m.UID != ref.MemberUID {
+	if m != nil && m.UID == old.Status.ClaimRef.MemberUID {
 		return field.ErrorList{field.Forbidden(path,
-			fmt.Sprintf("a recovery must name the current UID of member %s", ref.Member))}
+			fmt.Sprintf("member %s still has the old UID %s", ref.Member, m.UID))}
 	}
 	return nil
 }

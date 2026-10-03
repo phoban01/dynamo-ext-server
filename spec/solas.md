@@ -1032,6 +1032,7 @@ A member that joined again with a new UID MAY recover a device whose
 ADR 0020.
 A recovery MUST be one status update that sets the `claimRef` to the
 member's current UID and raises `status.fencingToken`, spec 5.3 and 13.2.
+A recovery MUST clear `status.offer`, because the old identity made it.
 The server MUST reject a recovery unless the member name and the claim
 UID are the same, and no `Member` has the old member UID.
 After a recovery, the controller MUST set the claim back to `Bound`.
