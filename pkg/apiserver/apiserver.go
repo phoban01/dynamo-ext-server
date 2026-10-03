@@ -1,6 +1,9 @@
 package apiserver
 
 import (
+	"context"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -38,11 +41,21 @@ func (c CompletedConfig) New() (*Server, error) {
 		return nil, err
 	}
 	getter := c.GenericConfig.RESTOptionsGetter
-	devices, deviceStatus, err := device.NewREST(Scheme, getter)
+	policies, err := memberpolicy.NewREST(Scheme, getter)
 	if err != nil {
 		return nil, err
 	}
-	policies, err := memberpolicy.NewREST(Scheme, getter)
+	lookup := func(ctx context.Context, member string) (*solas.MemberPolicy, error) {
+		obj, err := policies.Get(ctx, member, &metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return obj.(*solas.MemberPolicy), nil
+	}
+	devices, deviceStatus, err := device.NewRESTWithPolicies(Scheme, getter, lookup)
 	if err != nil {
 		return nil, err
 	}

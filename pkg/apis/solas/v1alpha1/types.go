@@ -96,6 +96,10 @@ type ClaimRef struct {
 	// display only.
 	// +optional
 	BoundAt *metav1.Time `json:"boundAt,omitempty"`
+	// Protected means that the device can only be released, not
+	// preempted, spec 10.10.
+	// +optional
+	Protected bool `json:"protected,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -76,6 +76,9 @@ type ClaimRef struct {
 	// BoundAt is when the bind happened, by the binder's clock. For
 	// display only.
 	BoundAt *metav1.Time
+	// Protected means that the device can only be released, not
+	// preempted, spec 10.10.
+	Protected bool
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

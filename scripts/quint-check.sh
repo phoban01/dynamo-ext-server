@@ -56,6 +56,7 @@ done
 
 pass "test solas2" quint test quint/solas.qnt --main solas2
 pass "test solas2delay" quint test quint/solas.qnt --main solas2delay
+pass "test solas2protect" quint test quint/solas.qnt --main solas2protect
 pass "test migrate2" quint test quint/migrate.qnt --main migrate2
 pass "test restore2" quint test quint/restore.qnt --main restore2
 pass "test limits2" quint test quint/limits.qnt --main limits2

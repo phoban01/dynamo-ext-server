@@ -131,6 +131,11 @@ func validatePreemption(d, old *solas.Device) field.ErrorList {
 			errs = append(errs, field.Forbidden(path, "the device is not preemptible"))
 		case old.Status.ClaimRef == nil:
 			errs = append(errs, field.Forbidden(path, "the device is free; bind it instead"))
+		//= spec/solas.md#10-10-protected-holders
+		//# The server MUST reject a preemption request on a device whose holder is
+		//# protected.
+		case old.Status.ClaimRef.Protected:
+			errs = append(errs, field.Forbidden(path, "the holder is protected; it can only release the device"))
 		//= spec/solas.md#10-5-preemption-request
 		//# The server MUST reject a request whose priority is not greater than the
 		//# priority of the holder.

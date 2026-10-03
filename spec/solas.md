@@ -804,6 +804,17 @@ list, as it does for a `claimRef`, spec 8.3.
 The controller MUST clear a request that names its own member and a claim
 that does not exist, as it does for a `claimRef`, spec 6.4.
 
+### 10.10. Protected holders
+
+A claim MAY ask for protection in `DeviceClaim.spec.protected`.
+The `claimRef` of a protected claim MUST carry `protected: true`.
+The server MUST reject a `claimRef` with `protected: true` unless the
+`MemberPolicy` of its member sets `allowProtected`, spec 15.1.
+So only an operator decides which members may protect their claims.
+The server MUST reject a preemption request on a device whose holder is
+protected.
+A protected holder can only release its device.
+
 ## 11. Version skew
 
 Member clusters upgrade in waves, so servers of two releases share one

@@ -28,6 +28,12 @@ type StatusREST struct {
 
 // NewREST returns the stores of devices and their status.
 func NewREST(scheme *runtime.Scheme, optsGetter generic.RESTOptionsGetter) (*REST, *StatusREST, error) {
+	return NewRESTWithPolicies(scheme, optsGetter, nil)
+}
+
+// NewRESTWithPolicies returns the stores of devices, with the lookup of
+// member policies that protection needs, spec 10.10.
+func NewRESTWithPolicies(scheme *runtime.Scheme, optsGetter generic.RESTOptionsGetter, policies PolicyLookup) (*REST, *StatusREST, error) {
 	strategy := NewStrategy(scheme)
 	store := &genericregistry.Store{
 		NewFunc:                   func() runtime.Object { return &solas.Device{} },
@@ -54,6 +60,7 @@ func NewREST(scheme *runtime.Scheme, optsGetter generic.RESTOptionsGetter) (*RES
 	//# `Device` MUST have a `status` subresource.
 	statusStore := *store
 	status := NewStatusStrategy(strategy)
+	status.policies = policies
 	statusStore.UpdateStrategy = status
 	statusStore.ResetFieldsStrategy = status
 	return &REST{store}, &StatusREST{store: &statusStore}, nil

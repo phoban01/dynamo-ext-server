@@ -153,6 +153,13 @@ func schema_pkg_apis_solas_v1alpha1_ClaimRef(ref common.ReferenceCallback) commo
 							Ref:         ref(v1.Time{}.OpenAPIModelName()),
 						},
 					},
+					"protected": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Protected means that the device can only be released, not preempted, spec 10.10.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"member", "memberUID", "namespace", "name", "uid"},
 			},

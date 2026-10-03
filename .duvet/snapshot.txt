@@ -491,6 +491,15 @@ SPECIFICATION: [Solas specification](spec/solas.md)
     TEXT[!MUST,implementation]: The controller MUST clear a request that names its own member and a claim
     TEXT[!MUST,implementation]: that does not exist, as it does for a `claimRef`, spec 6.4.
 
+  SECTION: [10.10. Protected holders](#10-10-protected-holders)
+    TEXT[!MAY]: A claim MAY ask for protection in `DeviceClaim.spec.protected`.
+    TEXT[!MUST]: The `claimRef` of a protected claim MUST carry `protected: true`.
+    TEXT[!MUST,implementation,test]: The server MUST reject a `claimRef` with `protected: true` unless the
+    TEXT[!MUST,implementation,test]: `MemberPolicy` of its member sets `allowProtected`, spec 15.1.
+    TEXT[!MUST,implementation,test]: The server MUST reject a preemption request on a device whose holder is
+    TEXT[!MUST,implementation,test]: protected.
+    TEXT[implementation,test]: A protected holder can only release its device.
+
   SECTION: [11.1. Format version](#11-1-format-version)
     TEXT[!MUST]: The store MUST hold one finalized format version.
     TEXT[implementation]: The finalized format starts at 1.
